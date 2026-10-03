@@ -215,3 +215,11 @@ table.reveal tr.human td:nth-child(2) { color: var(--accent); font-weight: 700; 
 .rf-title { font-size: 26px; font-weight: 900; color: var(--mafia); letter-spacing: 0.04em; }
 .rf-text { font-size: 13px; line-height: 1.5; }
 @keyframes rf { 0% { opacity: 0; transform: translate(-50%, -12px) scale(0.96); } 10% { opacity: 1; transform: translate(-50%, 0) scale(1.02); } 18% { transform: translate(-50%, 0) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* what each seat said today */
+.seat-stance { font-size: 12px; margin-top: 6px; padding: 3px 8px; border-radius: 999px; background: var(--panel-2); display: inline-block; }
+.seat-stance.accuse { background: #fbe3e5; color: #8c2430; }
+.seat-stance.defend { background: #e3f1ec; color: #1f6b56; }
+.seat-stance.claim { background: #ece6f9; color: #5a3fa8; }
+.seat-stance.deny { background: #fdf0d8; color: #7a5410; }
+.seat-accused { font-size: 11px; margin-top: 4px; color: var(--mafia); font-weight: 700; }

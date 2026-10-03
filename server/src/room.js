@@ -328,7 +328,7 @@ export class Room extends DurableObject {
       if (!text) continue;
       setLineText(g, ev, text);
       if (human) this.humanTexts.push(text);
-      messages.push({ seat: ev.speaker, text });
+      messages.push({ seat: ev.speaker, text, intent: ev.intent, target: ev.target, result: ev.result });
     }
     this.broadcast({ t: 'reveal', day: r.day, round: r.round, messages });
     if (g.phase === 'statement') this.openStatement();

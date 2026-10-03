@@ -211,6 +211,7 @@ function newGame() {
   // Notes from past games only; this game's roles are never reflected here.
   S.seatNotes = Object.fromEntries(CHARACTERS.map((c) => [c.id, seatNote(S.profile.games, c.id, n)]));
   S.feed = [];
+  S.stance = {};
   S.gm = { n, start: Date.now(), calls: 0, failures: 0, rejected: 0, inputTokens: 0, outputTokens: 0, samples: [], ai: S.aiOn };
   updateBadges();
   renderGame();
@@ -270,6 +271,32 @@ function feedItemHtml(it) {
     <div class="text">${esc(it.text)}</div>${ev}</div></div>`;
 }
 
+// What a seat said most recently today, shown under the seat once the line is on screen.
+function stanceLabel(st, nameOf = displayName) {
+  if (!st) return '';
+  const t = st.target ? nameOf(st.target) : '';
+  switch (st.intent) {
+    case 'accuse':
+      return `🗯 ${t} 의심`;
+    case 'defend':
+      return `🤝 ${t} 감쌈`;
+    case 'deny':
+      return '🙅 자기 부인';
+    case 'claim':
+      return `🔮 예언: ${t} ${st.result === 'mafia' ? '마피아' : '시민'}`;
+    case 'skip':
+      return '… 말 없음';
+    default:
+      return '👀 관망';
+  }
+}
+
+function seatStanceHtml(id, stance, nameOf = displayName) {
+  const st = stance?.[id];
+  const accused = Object.values(stance || {}).filter((x) => x.intent === 'accuse' && x.target === id).length;
+  return `${st ? `<div class="seat-stance ${st.intent}">${esc(stanceLabel(st, nameOf))}</div>` : ''}${accused ? `<div class="seat-accused">의심받음 ${accused}</div>` : ''}`;
+}
+
 function seatsHtml() {
   const v = publicView(S.game);
   const counts = {};
@@ -283,10 +310,10 @@ function seatsHtml() {
       return `<div class="seat ${p.alive ? '' : 'dead'} ${p.id === HUMAN_ID ? 'me' : ''}" data-seat="${p.id}">
         <img src="${portrait(p.id)}" alt="" />
         <div class="seat-name">${esc(displayName(p.id))} ${role}</div>
-        <div class="seat-sub">${c ? esc(c.title) : '플레이어'}</div>
         ${c ? `<div class="seat-watch" title="이 라이벌이 지켜보는 당신의 습관">👁 ${esc(c.watchLabel)}</div>` : ''}
         ${S.seatNotes?.[p.id] ? `<div class="seat-note" title="내 노트: 지난 판들에서 본 이 라이벌">📓 ${esc(S.seatNotes[p.id])}</div>` : ''}
         ${check ? `<div class="seat-check ${check.result}">조사: ${check.result === 'mafia' ? '마피아' : '시민'}</div>` : ''}
+        ${p.alive ? seatStanceHtml(p.id, S.stance) : ''}
         ${counts[p.id] ? `<div class="votes">${'●'.repeat(counts[p.id])}</div>` : ''}
         ${voted[p.id] ? `<div class="voted">→ ${esc(displayName(voted[p.id]))}</div>` : ''}
       </div>`;
@@ -444,6 +471,8 @@ async function processEvents(events) {
       const text = humanLine(ev);
       setLineText(g, ev, text);
       pushFeed({ kind: 'line', speaker: HUMAN_ID, text, final: ev.final });
+      S.stance[HUMAN_ID] = ev;
+      refreshSeats();
     } else if (ev.t === 'statement') {
       const batch = [];
       while (i < events.length && events[i].t === 'statement' && events[i].speaker !== HUMAN_ID) batch.push(events[i++]);
@@ -456,6 +485,8 @@ async function processEvents(events) {
       for (let k = 0; k < batch.length; k++) {
         setLineText(g, batch[k], lines[k].text);
         pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length, final: batch[k].final });
+        S.stance[batch[k].speaker] = batch[k];
+        refreshSeats();
         if (batch[k].evidence?.length && batch[k].target === HUMAN_ID && batch[k].intent === 'accuse') readFlash(batch[k].speaker, lines[k].text);
         await sleep(450);
       }
@@ -495,7 +526,11 @@ async function processEvents(events) {
       refreshSeats();
       if (ev.phase === 'vote') pushFeed({ kind: 'system', text: `${ev.day}일차 투표. 처형할 사람을 고르세요.` });
       if (ev.phase === 'night') pushFeed({ kind: 'system', text: `${ev.day}일차 밤.` });
-      if (ev.phase === 'statement' && ev.day > 1 && ev.round === 1) pushFeed({ kind: 'system', text: `${ev.day}일차 낮.` });
+      if (ev.phase === 'statement' && ev.day > 1 && ev.round === 1) {
+        S.stance = {};
+        refreshSeats();
+        pushFeed({ kind: 'system', text: `${ev.day}일차 낮.` });
+      }
       if (ev.phase === 'statement' && ev.round > 1) pushFeed({ kind: 'system', text: `${ev.round}라운드 — 방금 말에 반응할 차례.` });
     } else if (ev.t === 'over') {
       pushFeed({ kind: 'system', text: ev.timeout ? '4일이 지났습니다 — 마피아가 끝까지 숨어 승리' : ev.winner === 'town' ? '시민 승리' : '마피아 승리' });
@@ -616,7 +651,7 @@ function showReport(report, record, roles) {
   renderReport();
 }
 
-const multi = setupMulti({ S, store, $, esc, showModal, closeModal, renderTitle, renderLines, updateBadges, bridge, showReport });
+const multi = setupMulti({ S, store, $, esc, showModal, closeModal, renderTitle, renderLines, updateBadges, bridge, showReport, seatStanceHtml });
 
 function showLastReport() {
   const last = S.profile.games[S.profile.games.length - 1];

@@ -13,7 +13,7 @@ const INTENT_KO = { accuse: '의심', defend: '감싸기', pass: '관망', deny:
 const COLORS = ['#5b8def', '#e36fa4', '#c7903a', '#4fb39a', '#9b7be0', '#d0505a', '#6fb3d9', '#b9b34f'];
 
 export function setupMulti(ctx) {
-  const { S, store, $, esc, showModal, closeModal, renderTitle, renderLines, updateBadges, bridge, showReport } = ctx;
+  const { S, store, $, esc, showModal, closeModal, renderTitle, renderLines, updateBadges, bridge, showReport, seatStanceHtml } = ctx;
   const M = { ws: null, code: null, players: [], host: false, msg: '' };
   let tick = null;
 
@@ -151,7 +151,12 @@ export function setupMulti(ctx) {
       M.submitted = true;
       renderActions();
     } else if (m.t === 'reveal') {
-      for (const x of m.messages) pushFeed({ kind: 'chat', seat: x.seat, text: x.text });
+      if (m.round === 1) M.stance = {};
+      for (const x of m.messages) {
+        pushFeed({ kind: 'chat', seat: x.seat, text: x.text });
+        if (x.intent) M.stance[x.seat] = x;
+      }
+      renderSeats();
       if (!m.messages.length) pushFeed({ kind: 'sys', text: '아무도 말하지 않았다.' });
     } else if (m.t === 'vote_result') {
       pushFeed({ kind: 'sys', text: m.votes.map((v) => `${nameOf(v.voter)}→${nameOf(v.target)}`).join('  ') });
@@ -181,6 +186,7 @@ export function setupMulti(ctx) {
     M.alive = Object.fromEntries(m.seats.map((s) => [s.id, true]));
     M.color = Object.fromEntries(m.seats.map((s, i) => [s.id, COLORS[i % COLORS.length]]));
     M.feed = [];
+    M.stance = {};
     M.startedAt = Date.now();
     S.game = null;
     $('#screen').innerHTML = `
@@ -211,7 +217,8 @@ export function setupMulti(ctx) {
       .map(
         (s) => `<div class="seat ${M.alive[s.id] ? '' : 'dead'} ${s.id === M.seat ? 'me' : ''}">
         <div class="nick-avatar" style="background:${M.color[s.id]}">${esc(s.nick.slice(0, 1))}</div>
-        <div class="seat-name">${esc(s.nick)}${s.id === M.seat ? ' <span class="muted small">(나)</span>' : ''}${M.partners?.includes(s.id) ? ' <span class="role-tag mafia">동료</span>' : ''}</div></div>`,
+        <div class="seat-name">${esc(s.nick)}${s.id === M.seat ? ' <span class="muted small">(나)</span>' : ''}${M.partners?.includes(s.id) ? ' <span class="role-tag mafia">동료</span>' : ''}</div>
+        ${M.alive[s.id] ? seatStanceHtml(s.id, M.stance, nameOf) : ''}</div>`,
       )
       .join('');
   }
