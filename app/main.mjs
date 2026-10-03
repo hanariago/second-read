@@ -15,6 +15,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '..');
 
 app.setName(APP_NAME);
+// Dev self-check (scripts/selfcheck.mjs): isolated data folder, no real browser.
+const SELFCHECK = process.env.SECOND_READ_SELFCHECK || null;
+if (SELFCHECK) app.setPath('userData', path.join(SELFCHECK, 'userdata'));
 if (!app.requestSingleInstanceLock()) app.quit();
 
 const userDir = () => app.getPath('userData');
@@ -28,10 +31,11 @@ const EXTERNAL_OK = [
   'https://chatgpt.com/settings/usage',
   'https://help.openai.com',
   REPO_URL,
-  'https://auth.openai.com/api/accounts/authorize',
+  'https://auth.openai.com/',
 ];
 const openExternal = (url) => {
   if (!EXTERNAL_OK.some((p) => url.startsWith(p))) throw new Error('blocked url');
+  if (SELFCHECK) return console.log('[selfcheck] openExternal', new URL(url).origin + new URL(url).pathname);
   return shell.openExternal(url);
 };
 
@@ -73,7 +77,7 @@ async function complete(id, req) {
     const s = await settings();
     const dropped = new Set(s.dropped?.[model] || []);
     let refreshed = false;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       // Low reasoning effort keeps rival lines fast; dropped automatically if the model rejects it.
       const extra = dropped.has('reasoning') ? {} : { reasoning: { effort: 'low' } };
       const schema = dropped.has('text') ? null : req.schema;
@@ -81,9 +85,9 @@ async function complete(id, req) {
         const res = await streamResponse({ token, model, instructions: req.instructions, input: req.input, schema, extra, signal: ctrl.signal });
         return { ok: true, ...res };
       } catch (e) {
-        if (e.code === 'subscription_sharing_unsupported_capability' && e.param) {
-          const top = String(e.param).split('.')[0];
-          if (!['reasoning', 'text'].includes(top) || dropped.has(top)) throw e;
+        const top = String(e.param ?? '').split('.')[0];
+        const droppable = ['reasoning', 'text'].includes(top) && !dropped.has(top);
+        if (droppable && (e.code === 'subscription_sharing_unsupported_capability' || e.status === 400)) {
           dropped.add(top);
           await patchSettings({ dropped: { ...(s.dropped || {}), [model]: [...dropped] } });
           log('dropped unsupported field', top);
@@ -180,6 +184,10 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.loadFile(path.join(root, 'renderer', 'index.html'));
+  if (SELFCHECK) {
+    win.webContents.on('console-message', (e) => console.log('[renderer]', e.message));
+    win.webContents.once('did-finish-load', () => import('../scripts/selfcheck.mjs').then((m) => m.run(win, SELFCHECK, app)));
+  }
 }
 
 app.whenReady().then(() => {

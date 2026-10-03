@@ -13,7 +13,8 @@
     "test": "node --test test/*.test.js",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
-    "dist": "electron-builder --mac --win"
+    "dist": "electron-builder --mac --win",
+    "selfcheck": "SECOND_READ_SELFCHECK=${TMPDIR:-/tmp}/second-read-selfcheck electron ."
   },
   "dependencies": {
     "jose": "^6.2.0"

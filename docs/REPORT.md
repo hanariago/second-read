@@ -6,10 +6,12 @@
 
 | 항목 | 상태 |
 | --- | --- |
+| 빌드 위치 | 로컬 `dist/release/` + GitHub Release v0.1.0 |
 | macOS 빌드 | `SecondRead-0.1.0-mac-universal.dmg` / `.zip` (Apple Silicon + Intel, ad-hoc 서명, `codesign --verify --deep --strict` 통과, 패키지 실행 확인) |
 | Windows 빌드 | `SecondRead-0.1.0-win-x64.zip` / `SecondRead-0.1.0-win-x64.exe`(설치형). macOS에서 크로스 빌드했고 Windows 실기 실행은 하지 못함 |
 | 공개 저장소 | https://github.com/hanariago/second-read (MIT) |
 | itch.io 안내문 | `docs/itch-page.md` |
+| 실제 앱 경로 자체 점검 (`npm run selfcheck`) | 메인 프로세스+preload 브리지로 타이틀·설정·오프라인 1판·`profile.json` 저장 확인. "Continue with ChatGPT" 클릭 시 OpenAI discovery 조회 → authorize URL 생성 → `127.0.0.1:1455/auth/callback` 리스너 기동 → 잘못된 state 콜백을 `state_mismatch`로 거부하는 것까지 확인 (실제 계정 로그인 직전 단계) |
 | 로그인 → 판 진행 → 판 간 텔 누적 → 텔 근거 지목 | 구현. 오프라인 모드로 4판 자동 플레이 시 4판째 레온이 "가장 먼저 투표" 텔로 지목하고, 기억 때문에 투표 대상이 바뀐 것(읽힘)이 결과 화면에 표시되는 것까지 스크린샷으로 확인 |
 
 ## 성공 기준 충족 여부

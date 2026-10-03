@@ -376,8 +376,9 @@ async function finishGame() {
   const report = rivalReport(S.profile, record);
   S.lastReport = { report, record, roles: Object.fromEntries(g.players.map((p) => [p.id, p.role])), remarks: null };
   renderReport();
+  const mine = S.lastReport;
   const remarks = await renderLines(`${g.n}판 종료 후, 라이벌들이 플레이어에게 한마디씩 한다`, remarkSpecs(report), 'remarks');
-  S.lastReport.remarks = remarks;
+  mine.remarks = remarks;
   if (S.gm) {
     const s = S.gm.samples.filter((x) => x.totalMs != null);
     bridge?.metricsAppend({
@@ -396,7 +397,8 @@ async function finishGame() {
       flips: record.flips.length,
     });
   }
-  renderReport();
+  // The player may already have started the next game while remarks loaded.
+  if (S.lastReport === mine && !S.game && document.querySelector('.report')) renderReport();
 }
 
 const FLIP_LABEL = {

@@ -58,8 +58,8 @@ async function toError(res) {
     return new ApiError(fatal || e.code, { status: res.status, param: e.param, requestId, fatal: !!fatal, message: e.message });
   }
   // Direct-route admission failures use {detail}; treat as diagnostic text.
-  const code = res.status === 401 ? 'unauthorized' : res.status === 403 ? 'forbidden' : res.status === 503 ? 'unavailable' : `http_${res.status}`;
-  return new ApiError(code, { status: res.status, requestId, message: body.detail || e?.message });
+  const code = e?.type || (res.status === 401 ? 'unauthorized' : res.status === 403 ? 'forbidden' : res.status === 503 ? 'unavailable' : `http_${res.status}`);
+  return new ApiError(code, { status: res.status, param: e?.param ?? null, requestId, message: body.detail || e?.message });
 }
 
 // Streams one response. Returns { text, usage, ttftMs, totalMs, model }.

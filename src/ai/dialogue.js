@@ -33,7 +33,7 @@ export function createDialogue({ transport = null, timeoutMs = 10000, onMetric =
     const got = Array.isArray(parsed?.lines) ? parsed.lines : [];
     let rejected = 0;
     const out = specs.map((spec, i) => {
-      const line = got.find((l) => l?.speaker_id === spec.speaker) ?? got[i];
+      const line = got.find((l) => l?.speaker_id === spec.speaker);
       const why = parsed ? checkLine(spec, line) : 'no-model';
       if (why) {
         if (parsed) rejected++;

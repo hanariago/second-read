@@ -1,9 +1,8 @@
 # itch.io 페이지 안내문 초안
 
-> 업로드 파일 표시: `SecondRead-<버전>-mac-universal.dmg` → **macOS**, `SecondRead-<버전>-win-x64.zip`(또는 `.exe` 설치 파일) → **Windows**. 페이지 종류는 "Downloadable"(브라우저 플레이 아님).
+아래 "본문 시작"부터 "본문 끝"까지를 페이지 설명에 그대로 붙여 넣으세요.
 
----
-
+<!-- 본문 시작 -->
 **ChatGPT Plus 또는 Pro 구독자만 AI 플레이가 가능합니다.**
 
 ## Second Read — 나를 읽는 마피아
@@ -34,3 +33,13 @@
 ### 오픈소스
 
 소스 코드(MIT): https://github.com/hanariago/second-read
+<!-- 본문 끝 -->
+
+---
+
+## 업로드 설정 메모 (페이지에 넣지 않음)
+
+- 페이지 종류: Downloadable (브라우저 플레이 아님)
+- `SecondRead-<버전>-mac-universal.dmg` → **macOS** 표시
+- `SecondRead-<버전>-win-x64.zip` 와 `SecondRead-<버전>-win-x64.exe`(설치형) → **Windows** 표시
+- 파일은 GitHub Releases에서 받을 수 있음: https://github.com/hanariago/second-read/releases

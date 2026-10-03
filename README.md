@@ -58,6 +58,7 @@ npm install
 npm start            # 앱 실행
 npm test             # 단위 테스트
 npm run sim          # 시뮬레이션: 텔이 처음 드러나는 판, 기억 켬/끔 비교
+npm run selfcheck    # 실제 앱 경로 자동 점검 (격리된 데이터 폴더, 브라우저 안 엶)
 npm run dist:mac     # macOS universal dmg/zip (ad-hoc 서명)
 npm run dist:win     # Windows x64 zip + 설치 파일
 ```
