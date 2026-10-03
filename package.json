@@ -1,7 +1,7 @@
 {
   "name": "second-read",
   "productName": "Second Read",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI 라이벌이 판을 넘어 당신의 습관(텔)을 기억하는 턴제 마피아 게임. ChatGPT 플랜으로 동작.",
   "license": "MIT",
   "author": "Second Read contributors",
@@ -16,7 +16,8 @@
     "dist": "electron-builder --mac --win",
     "selfcheck": "SECOND_READ_SELFCHECK=${TMPDIR:-/tmp}/second-read-selfcheck electron .",
     "relay": "cd server && wrangler dev --port 8787 --ip 127.0.0.1",
-    "test:multi": "node test/multi.e2e.mjs"
+    "test:multi": "node test/multi.e2e.mjs",
+    "start:p2": "SECOND_READ_PROFILE=p2 electron ."
   },
   "dependencies": {
     "jose": "^6.2.0"

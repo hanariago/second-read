@@ -18,7 +18,10 @@ app.setName(APP_NAME);
 // Dev self-check (scripts/selfcheck.mjs): isolated data folder, no real browser.
 const SELFCHECK = process.env.SECOND_READ_SELFCHECK || null;
 if (SELFCHECK) app.setPath('userData', path.join(SELFCHECK, 'userdata'));
-if (!app.requestSingleInstanceLock()) app.quit();
+// Dev: SECOND_READ_PROFILE=<name> runs a second, separate copy (local multiplayer testing).
+const DEV_PROFILE = process.env.SECOND_READ_PROFILE?.replace(/[^\w-]/g, '') || null;
+if (DEV_PROFILE) app.setPath('userData', path.join(app.getPath('appData'), `Second Read (${DEV_PROFILE})`));
+if (!DEV_PROFILE && !app.requestSingleInstanceLock()) app.quit();
 
 const userDir = () => app.getPath('userData');
 const files = {

@@ -177,3 +177,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .intent-row details[open] { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; margin-top: 6px; }
 .chip-intent { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }
 .chip-intent.on { border-color: var(--accent); color: var(--accent); }
+
+/* multiplayer */
+.lobby-form { display: grid; gap: 10px; justify-items: center; margin: 20px 0; }
+.lobby-form input, .code-input { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font: inherit; }
+.lobby-form label { display: grid; gap: 6px; color: var(--muted); font-size: 13px; }
+.code-input { width: 120px; text-transform: uppercase; letter-spacing: 0.2em; text-align: center; }
+.room-code { font-size: 18px; margin: 16px 0; }
+.room-code b { font-size: 30px; letter-spacing: 0.25em; color: var(--accent); margin-left: 8px; }
+.players { list-style: none; padding: 0; display: grid; gap: 6px; justify-items: center; }
+.players .tag { font-size: 11px; background: #5c4a22; padding: 1px 6px; border-radius: 6px; }
+.game.multi .seats { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.game.multi .seat { min-height: 96px; }
+.nick-avatar { width: 46px; height: 46px; border-radius: 50%; margin: 0 auto; display: grid; place-items: center; font-weight: 800; color: #111; font-size: 20px; }
+.chat { margin: 6px 0; line-height: 1.5; }
+.chat b { margin-right: 6px; }
+.dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
+table.reveal { border-collapse: collapse; margin-top: 10px; min-width: 420px; }
+table.reveal td, table.reveal th { border-bottom: 1px solid var(--line); padding: 8px 12px; text-align: left; }
+table.reveal tr.human td:nth-child(2) { color: var(--accent); font-weight: 700; }

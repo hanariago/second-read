@@ -8,6 +8,7 @@ import { createBridgeTransport } from '../src/ai/bridgeTransport.js';
 import { templateLine, humanLine, withName } from '../src/ai/templates.js';
 import { sceneSummary, todayChat } from '../src/ai/prompts.js';
 import { createBridgeStore, createLocalStorageStore } from '../src/store/tellStore.js';
+import { setupMulti } from './multi.js';
 
 const bridge = window.secondRead ?? null;
 const store = bridge ? createBridgeStore(bridge) : createLocalStorageStore();
@@ -137,7 +138,7 @@ function renderTitle(msg = '') {
     <h1>Second Read</h1>
     <p class="tagline">기존 AI 마피아는 판이 끝나면 나를 잊는다.<br/>이 게임은 판이 쌓일수록 AI가 나를 읽고, 나는 읽힌 나를 속인다.</p>
     ${msg ? `<p class="warn">${esc(msg)}</p>` : ''}
-    <div class="title-actions">${main}</div>
+    <div class="title-actions">${main}${S.signingIn ? '' : `<button class="ghost" data-act="mOpen">친구와 하기 (멀티)</button>`}</div>
     ${S.profile.games.length ? `<div class="tally"><span>지금까지 ${S.profile.games.length}판</span><span class="read">읽힘 ${t.caught}</span><span class="bluff">속임 ${t.bluffs}</span>${S.profile.settings.memory ? '' : '<span class="off">기억 꺼짐</span>'}</div>
     <button class="link" data-act="lastReport">AI가 본 당신 (지난 판까지)</button>` : ''}
     <ul class="howto">
@@ -488,9 +489,17 @@ function renderReport() {
     ${flips.length ? '' : `<p class="muted">이번 판에는 기억 때문에 바뀐 투표가 없었습니다.</p>`}
     <div class="rivals">${rivals}</div>
     <p class="muted small">이 노트는 당신의 클릭(발언 종류, 투표 타이밍과 대상, 밤 선택)만으로 계산되며 이 컴퓨터에만 저장됩니다.</p>
-    <div class="row"><button class="primary big" data-act="newGame">${nextGameNumber(S.profile)}판째 시작</button><button class="ghost" data-act="title">타이틀</button></div>
+    <div class="row">${S.lastReport.multi ? `<button class="primary big" data-act="mBack">방으로 돌아가기</button>` : `<button class="primary big" data-act="newGame">${nextGameNumber(S.profile)}판째 시작</button>`}<button class="ghost" data-act="title">타이틀</button></div>
   </section>`;
 }
+
+// Used by multiplayer to show the same rival notebook after a room game.
+function showReport(report, record, roles) {
+  S.lastReport = { report, record, roles, remarks: null, multi: true };
+  renderReport();
+}
+
+const multi = setupMulti({ S, store, $, esc, showModal, closeModal, renderTitle, renderLines, updateBadges, bridge, showReport });
 
 function showLastReport() {
   const last = S.profile.games[S.profile.games.length - 1];
@@ -522,6 +531,7 @@ async function openSettings() {
       <label class="toggle"><input type="checkbox" id="memToggle" ${S.profile.settings.memory !== false ? 'checked' : ''}/> 라이벌이 지난 판을 기억함</label>
       <p class="muted small">끄면 라이벌이 지난 판을 참고하지 않습니다(비교용). 꺼진 상태로 한 판은 기억에 쌓이지 않습니다.</p>
       <button class="ghost danger" data-act="resetMemory">기억 초기화</button>
+      ${S.profile.style?.count ? `<button class="ghost danger" data-act="resetStyle">멀티 말투 학습 지우기 (${S.profile.style.count}줄)</button>` : ''}
       <p class="muted small">저장되는 것은 게임 안 클릭 기록뿐이며 이 컴퓨터에만 있습니다.</p>
     </section>
     <section><h3>측정 (AI 사용 판 기준)</h3>
@@ -553,6 +563,8 @@ document.addEventListener('click', async (e) => {
   if (!b) return;
   const a = b.dataset.act;
   const t = b.dataset.target;
+  if (a === 'mBack') return multi.backToRoom();
+  if (multi.isMultiAction(a)) return multi.onClick(a, b);
   switch (a) {
     case 'signIn':
       return signIn({ mode: 'continue' });
@@ -628,6 +640,10 @@ document.addEventListener('click', async (e) => {
       $('#settings').classList.add('hidden');
       if (!S.game) renderTitle();
       return;
+    case 'resetStyle':
+      S.profile = { ...S.profile, style: null };
+      await store.save(S.profile);
+      return openSettings();
     case 'exportMetrics':
       return bridge?.metricsExport();
   }

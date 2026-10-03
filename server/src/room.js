@@ -108,6 +108,7 @@ export class Room extends DurableObject {
         // The player's own past records, used for this game only and never stored.
         records: Array.isArray(msg.records) ? msg.records.slice(-40) : [],
         memory: msg.memory !== false,
+        skipRate: Number.isFinite(msg.skipRate) ? msg.skipRate : null,
       });
       if (!this.host || !this.clients.get(this.host)?.joined) this.host = pid;
       this.send(pid, { t: 'welcome', host: pid === this.host });
@@ -171,7 +172,10 @@ export class Room extends DurableObject {
       c.seat = `h${i + 1}`;
       return { id: c.seat, n: c.n, games: c.memory ? c.records : [] };
     });
-    this.g = createMatch({ mode: 'multi', humans, seed: (Math.random() * 2 ** 31) | 0 });
+    // Rivals skip rounds about as often as people in these rooms do.
+    const rates = players.map(([, c]) => c.skipRate).filter((x) => x !== null);
+    const aiSkipRate = rates.length ? Math.min(0.5, Math.max(0.05, rates.reduce((a, b) => a + b, 0) / rates.length)) : 0.2;
+    this.g = createMatch({ mode: 'multi', humans, seed: (Math.random() * 2 ** 31) | 0, aiSkipRate });
     const ids = this.g.players.map((p) => p.id);
     const nicks = shuffle(NICKS).slice(0, ids.length);
     this.nick = Object.fromEntries(ids.map((id, i) => [id, nicks[i]]));
@@ -212,7 +216,7 @@ export class Room extends DurableObject {
         byOwner.get(owner).push(spec);
         this.round.waiting.add(s.speaker);
       } else {
-        this.round.lines[s.speaker] = templateLine(spec, Math.floor(Math.random() * 1000), { nameOf, casual: true });
+        this.round.lines[s.speaker] = this.freshTemplate(spec);
       }
       this.round.specs = { ...(this.round.specs || {}), [s.speaker]: spec };
     }
@@ -226,6 +230,18 @@ export class Room extends DurableObject {
       this.send(p, { t: 'round_open', day: g.day, round: g.round, rounds: g.rounds, deadline, options: this.phaseOptions(c.seat) });
     }
     this.setTimer(this.T.round, () => this.finishRound());
+  }
+
+  // Identical fallback lines in one room would give the rivals away.
+  freshTemplate(spec) {
+    const used = new Set([...Object.values(this.round?.lines || {}), ...(this.usedLines || [])]);
+    let text = '';
+    for (let i = 0; i < 12; i++) {
+      text = templateLine(spec, Math.floor(Math.random() * 1000), { nameOf: this.nameOf, casual: true });
+      if (!used.has(text)) break;
+    }
+    this.usedLines = [...(this.usedLines || []), text].slice(-12);
+    return text;
   }
 
   receiveLines(pid, msg) {
@@ -269,9 +285,8 @@ export class Room extends DurableObject {
     if (!g || !r || r.closed || g.phase !== 'statement') return;
     r.closed = true;
     clearTimeout(this.timer);
-    const nameOf = this.nameOf;
     for (const ai of Object.keys(r.specs || {})) {
-      if (!r.lines[ai]) r.lines[ai] = templateLine(r.specs[ai], Math.floor(Math.random() * 1000), { nameOf, casual: true });
+      if (!r.lines[ai]) r.lines[ai] = this.freshTemplate(r.specs[ai]);
     }
     const events = close(g);
     const messages = [];
