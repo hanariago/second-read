@@ -1,0 +1,83 @@
+{
+  "name": "second-read",
+  "productName": "Second Read",
+  "version": "0.1.0",
+  "description": "AI 라이벌이 판을 넘어 당신의 습관(텔)을 기억하는 턴제 마피아 게임. ChatGPT 플랜으로 동작.",
+  "license": "MIT",
+  "author": "Second Read contributors",
+  "type": "module",
+  "main": "app/main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "sim": "node sim/simulate.mjs",
+    "test": "node --test test/*.test.js",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder --mac --win"
+  },
+  "dependencies": {
+    "jose": "^6.2.0"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "io.github.hanariago.secondread",
+    "productName": "Second Read",
+    "artifactName": "SecondRead-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "app/**",
+      "src/**",
+      "renderer/**",
+      "assets/**",
+      "package.json",
+      "LICENSE",
+      "!**/._*"
+    ],
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.games",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    }
+  }
+}

@@ -1,0 +1,167 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1e222b;
+  --line: #2a2f3a;
+  --text: #e8e6e1;
+  --muted: #8d93a1;
+  --accent: #d9a441;
+  --mafia: #d0505a;
+  --town: #4f9de0;
+  --seer: #9b7be0;
+  --good: #4fb39a;
+  font-family: 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); min-height: 100vh; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.hidden { display: none !important; }
+.muted { color: var(--muted); font-weight: 400; }
+.small { font-size: 12px; }
+.warn { color: #f0b46a; }
+
+.topbar { display: flex; justify-content: space-between; align-items: center; height: 52px; padding: 0 20px; border-bottom: 1px solid var(--line); background: #0c0e12; }
+.brand { font-weight: 800; letter-spacing: 0.02em; }
+.brand .sub { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 13px; }
+.topright { display: flex; gap: 12px; align-items: center; }
+.plan-badge, .plan-inline { display: flex; align-items: center; gap: 8px; font-size: 13px; background: #10233d; border: 1px solid #23476f; padding: 5px 10px; border-radius: 999px; }
+.plan-badge img, .plan-inline img { width: 16px; height: 16px; }
+.offline-badge { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); padding: 4px 10px; border-radius: 999px; }
+.icon-btn { background: transparent; border: 1px solid var(--line); border-radius: 8px; width: 34px; height: 34px; }
+.link { background: none; border: none; color: #8fc1ff; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.primary { background: var(--accent); color: #17130a; border: none; border-radius: 10px; padding: 10px 18px; font-weight: 700; }
+.primary.big { padding: 14px 28px; font-size: 17px; }
+.ghost { background: transparent; border: 1px solid var(--line); border-radius: 10px; padding: 9px 16px; }
+.ghost.danger { border-color: #6b2a30; color: #f08a92; }
+.row { display: flex; gap: 10px; align-items: center; margin-top: 14px; flex-wrap: wrap; }
+.row.col { flex-direction: column; align-items: stretch; }
+
+/* Continue with ChatGPT (black format, official logo) */
+.cgpt-btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; background: #000; color: #fff; border: 1px solid #3a3a3a; border-radius: 999px; padding: 12px 22px; font-weight: 600; font-size: 15px; min-width: 260px; }
+.cgpt-btn img { width: 20px; height: 20px; }
+
+#screen { height: calc(100vh - 52px); overflow: auto; }
+
+/* title */
+.title { max-width: 760px; margin: 0 auto; padding: 48px 24px; text-align: center; }
+.title-art { display: flex; justify-content: center; gap: 10px; margin-bottom: 18px; }
+.title-art img { width: 64px; height: 64px; border-radius: 14px; }
+.title h1 { font-size: 44px; margin: 6px 0; letter-spacing: 0.01em; }
+.tagline { color: #c9c4b8; line-height: 1.6; }
+.title-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; margin: 26px 0; }
+.hint { color: var(--muted); font-size: 13px; max-width: 460px; line-height: 1.5; }
+.tally { display: flex; gap: 12px; justify-content: center; margin: 8px 0; font-size: 14px; flex-wrap: wrap; }
+.tally span { background: var(--panel); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; }
+.tally .read { color: #f08a92; }
+.tally .bluff { color: #7fd3bd; }
+.tally .off, .off { color: var(--muted); border: 1px dashed var(--line); padding: 2px 8px; border-radius: 999px; font-size: 12px; }
+.tally.big { justify-content: flex-start; font-size: 15px; }
+.howto { text-align: left; color: #b9b5ab; line-height: 1.7; font-size: 14px; margin-top: 30px; }
+
+/* game */
+.game { display: grid; grid-template-rows: auto auto 1fr auto; height: 100%; max-width: 1180px; margin: 0 auto; padding: 12px 20px; gap: 10px; }
+.game-head { display: flex; gap: 14px; align-items: center; color: var(--muted); font-size: 14px; }
+.my-role { font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--panel-2); }
+.my-role.mafia { color: var(--mafia); }
+.my-role.seer { color: var(--seer); }
+.my-role.villager { color: var(--town); }
+.seats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.seat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; text-align: center; position: relative; min-height: 150px; }
+.seat.me { border-color: #5c4a22; }
+.seat img { width: 58px; height: 58px; border-radius: 12px; }
+.seat.dead { opacity: 0.45; filter: grayscale(0.9); }
+.seat-name { font-weight: 700; margin-top: 4px; }
+.seat-sub { color: var(--muted); font-size: 12px; }
+.seat-watch { font-size: 11px; color: #b8b2a2; margin-top: 4px; }
+.seat-check { font-size: 11px; margin-top: 4px; }
+.seat-check.mafia { color: var(--mafia); }
+.seat-check.town { color: var(--town); }
+.votes { color: var(--accent); letter-spacing: 2px; margin-top: 4px; }
+.voted { font-size: 11px; color: var(--muted); }
+.role-tag { font-size: 11px; padding: 1px 6px; border-radius: 6px; margin-left: 4px; font-weight: 600; background: var(--panel-2); }
+.role-tag.mafia { color: var(--mafia); }
+.role-tag.seer { color: var(--seer); }
+.role-tag.villager { color: var(--town); }
+
+.feed { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; overflow-y: auto; min-height: 120px; }
+.sys { color: var(--muted); font-size: 13px; margin: 6px 0; }
+.sys.private { color: var(--seer); }
+.vote-line { font-size: 13px; color: #b9b5ab; margin: 3px 0 3px 44px; }
+.line { display: flex; gap: 10px; margin: 8px 0; align-items: flex-start; }
+.line img { width: 34px; height: 34px; border-radius: 9px; }
+.bubble { background: var(--panel-2); border: 1px solid var(--line); padding: 8px 12px; border-radius: 12px; max-width: 80%; }
+.line.me .bubble { border-color: #5c4a22; }
+.line.memory .bubble { border-color: #7a3b44; background: #241a1e; }
+.who { font-size: 12px; font-weight: 700; margin-bottom: 2px; }
+.who .tag, .tell-label .tag { font-size: 10px; background: #7a3b44; color: #ffd9de; padding: 1px 6px; border-radius: 6px; margin-left: 6px; }
+.text { line-height: 1.5; }
+.evidence { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #151820; border: 1px solid var(--line); color: #c7c2b6; }
+.chip.mafia { border-color: #6b2a30; }
+.chip.town { border-color: #23476f; }
+.chip.now { border-color: #5c4a22; }
+
+.actions { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; min-height: 96px; }
+.act-title { font-weight: 700; margin-bottom: 8px; }
+.act-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.act-label { width: 96px; color: var(--muted); font-size: 13px; }
+.target { display: inline-flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px 6px 6px; }
+.target:hover, .ghost:hover { border-color: var(--accent); }
+.target img { width: 26px; height: 26px; border-radius: 7px; }
+.target.claim { padding: 6px 12px; color: var(--seer); }
+.waiting { color: var(--muted); }
+
+/* modal */
+.modal-wrap { position: fixed; inset: 0; background: rgba(5, 6, 9, 0.72); display: grid; place-items: center; z-index: 20; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 26px 28px; max-width: 440px; width: calc(100% - 32px); text-align: center; }
+.modal h2 { margin: 8px 0 10px; }
+.modal p { line-height: 1.6; color: #cfcabe; }
+.modal-logo img { width: 40px; height: 40px; }
+.role-card .role-kicker { color: var(--muted); font-size: 13px; }
+.role-card .role-name { font-size: 40px; font-weight: 800; margin: 6px 0 4px; }
+.role-card.mafia .role-name { color: var(--mafia); }
+.role-card.seer .role-name { color: var(--seer); }
+.role-card.villager .role-name { color: var(--town); }
+
+/* report */
+.report { max-width: 1100px; margin: 0 auto; padding: 24px; }
+.result { display: inline-block; padding: 14px 22px; border-radius: 16px; border: 1px solid var(--line); background: var(--panel); }
+.result.win { border-color: #2f6b5c; }
+.result.lose { border-color: #6b2a30; }
+.result-main { font-size: 34px; font-weight: 800; }
+.result-kicker { color: var(--muted); font-size: 13px; }
+.report h2 { margin-top: 26px; }
+.rivals { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 14px; }
+.rival { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; }
+.rival-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.rival-head img { width: 48px; height: 48px; border-radius: 12px; }
+.rival-name { font-weight: 800; }
+.tell-row { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: #14171d; }
+.tell-row.ready { outline: 1px solid #7a3b44; }
+.tell-label { font-size: 13px; margin-bottom: 6px; }
+.tell-bars { display: grid; gap: 4px; }
+.bar { position: relative; height: 18px; background: #0d0f13; border-radius: 6px; overflow: hidden; }
+.bar span { position: absolute; inset: 0 auto 0 0; }
+.bar.mafia span { background: #6b2a30; }
+.bar.town span { background: #23476f; }
+.bar em { position: relative; font-style: normal; font-size: 11px; padding-left: 8px; line-height: 18px; color: #ddd; }
+.flip { font-size: 13px; margin: 6px 0; padding: 6px 10px; border-radius: 8px; background: #14171d; line-height: 1.5; }
+.flip.read, .flip.misread { border-left: 3px solid var(--mafia); }
+.flip.deceived, .flip.cleared { border-left: 3px solid var(--good); }
+.remark { margin-top: 10px; font-style: italic; color: #e3dccb; line-height: 1.5; }
+
+/* settings drawer */
+.drawer { position: fixed; top: 52px; right: 0; bottom: 0; width: 380px; background: #12151b; border-left: 1px solid var(--line); padding: 16px 20px; overflow-y: auto; z-index: 10; }
+.drawer-head { display: flex; justify-content: space-between; align-items: center; }
+.drawer section { border-top: 1px solid var(--line); padding: 12px 0; }
+.drawer h3 { margin: 4px 0 8px; font-size: 14px; color: #cfcabe; }
+.drawer select { width: 100%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.toggle { display: flex; gap: 8px; align-items: center; }
+.drawer .cgpt-btn { min-width: 0; width: 100%; }
+
+@media (max-width: 1050px) {
+  .rivals { grid-template-columns: 1fr; }
+  .seat-watch { display: none; }
+}
