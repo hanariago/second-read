@@ -196,3 +196,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
 table.reveal { border-collapse: collapse; margin-top: 10px; min-width: 420px; }
 table.reveal td, table.reveal th { border-bottom: 1px solid var(--line); padding: 8px 12px; text-align: left; }
 table.reveal tr.human td:nth-child(2) { color: var(--accent); font-weight: 700; }
+.ghost.hot { border-color: var(--mafia); color: #ffd9de; }

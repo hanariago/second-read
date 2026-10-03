@@ -38,7 +38,7 @@ test('multi: every human gets only their own observations and flips', () => {
     for (const h of g.humanIds) {
       const r = gameRecord(g, h);
       assert.ok(r.flips.every((f) => f.human === h));
-      assert.ok(r.obs.every((o) => ['stance_accuse', 'stance_pass', 'round_skip', 'vote_retaliate', 'vote_own_accused', 'victim_accuser'].includes(o.f)));
+      assert.ok(r.obs.every((o) => ['stance_accuse', 'stance_pass', 'round_skip', 'vote_retaliate', 'vote_own_accused', 'victim_accuser', 'deny_when_accused'].includes(o.f)));
     }
   }
 });
@@ -105,4 +105,20 @@ test('multi render path: model lines with nicknames pass, cross-game memory fall
   assert.equal(lines[1].source, 'template');
   assert.equal(lines[1].reason, 'memory-without-evidence');
   assert.ok(!/입니다|습니다/.test(lines[1].text), 'fallback stays casual in multi');
+});
+
+test('self-defense: answering an accusation is recorded as a tell and counts in suspicion', async () => {
+  const { createGame, act } = await import('../src/core/engine.js');
+  let saw = false;
+  for (let s = 1; s < 80 && !saw; s++) {
+    const g = createGame({ n: 3, seed: s, forceRole: 'villager' });
+    act(g, { intent: 'pass' }); // round 1: rivals speak after this
+    if (g.pending?.type === 'statement' && g.pending.accusedBy.length) {
+      act(g, { intent: 'deny' });
+      const o = g.obs.you.find((x) => x.f === 'deny_when_accused');
+      assert.ok(o && o.v === true);
+      saw = true;
+    }
+  }
+  assert.ok(saw, 'some seed has the player accused in round 1');
 });

@@ -344,7 +344,8 @@ function renderActions() {
       <div class="act-row"><span class="act-label">의심한다</span>${targetButtons(p.targets, 'say-accuse')}</div>
       <div class="act-row"><span class="act-label">감싼다</span>${targetButtons(p.targets, 'say-defend')}</div>
       ${p.claims.length ? `<div class="act-row"><span class="act-label">조사 결과 공개</span>${p.claims.map((c) => `<button class="target claim" data-act="say-claim" data-target="${c.target}">${esc(withName(`{t}는 ${c.result === 'mafia' ? '마피아' : '시민'}`, c.target))}</button>`).join('')}</div>` : ''}
-      <div class="act-row"><button class="ghost" data-act="say-pass">관망한다</button>${p.accusedBy.length ? `<button class="ghost" data-act="say-deny">나는 아니라고 한다</button>` : ''}</div>`;
+      <div class="act-row"><span class="act-label">나를 변호</span><button class="ghost ${p.accusedBy.length ? 'hot' : ''}" data-act="say-deny">나는 아니다</button>${p.accusedBy.length ? `<span class="muted small">당신을 의심 중: ${esc(p.accusedBy.map((x) => displayName(x)).join(', '))}</span>` : ''}</div>
+      <div class="act-row"><button class="ghost" data-act="say-pass">관망한다</button></div>`;
     }
   } else if (p.type === 'vote') {
     const total = S.game.voteOrder[S.game.day].length;

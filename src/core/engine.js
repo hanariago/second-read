@@ -149,6 +149,13 @@ function accusersOf(g, day, target) {
   return (g.statements[day] || []).filter((s) => s.intent === 'accuse' && s.target === target).map((s) => s.speaker);
 }
 
+// Who had accused `h` before a statement at (day, round): earlier rounds today or yesterday.
+function accusersBefore(g, h, day, round) {
+  const today = (g.statements[day] || []).filter((o) => o.round < round);
+  const yesterday = g.statements[day - 1] || [];
+  return [...new Set([...yesterday, ...today].filter((o) => o.intent === 'accuse' && o.target === h).map((o) => o.speaker))];
+}
+
 function claimsAbout(g, t) {
   const out = [];
   for (const d of Object.keys(g.statements)) for (const s of g.statements[d]) if (s.intent === 'claim' && s.target === t) out.push(s);
@@ -171,6 +178,11 @@ function suspicion(g, cid, t) {
       if (s.speaker !== t) continue;
       if (s.intent === 'accuse' && s.target === cid) base += P.grudge;
       if (s.intent === 'defend' && s.target === cid) base -= 0.2;
+      if (s.intent === 'deny') {
+        const accusedBefore = accusersBefore(g, t, +d, s.round).length > 0;
+        // Answering an accusation calms the trusting rivals a little; denying unprompted looks odd.
+        base += accusedBefore ? -(0.05 + 0.5 * (1 - P.aggression)) : 0.2;
+      }
       // Defending someone later revealed as mafia is damning; accusing a revealed townie is suspicious.
       const dead = g.deaths.find((x) => x.id === s.target);
       if (dead) {
@@ -258,7 +270,7 @@ function setPending(g) {
       round: g.round,
       rounds: g.rounds,
       targets: others,
-      accusedBy: accusersOf(g, g.day, me).filter((id) => isAlive(g, id)),
+      accusedBy: accusersBefore(g, me, g.day, g.round).filter((id) => isAlive(g, id)),
       claims: g.humanRole === 'seer' ? checks.map((x) => ({ target: x.target, result: x.result })) : [],
     };
   } else if (g.phase === 'vote') {
@@ -367,6 +379,7 @@ function recordStatement(g, st) {
 }
 
 function recordHumanStatementObs(g, h, st) {
+  if (accusersBefore(g, h, st.day, st.round).length) g.obs[h].push({ f: 'deny_when_accused', v: st.intent === 'deny', day: st.day });
   if (st.round === 1) {
     g.obs[h].push({ f: 'stance_accuse', v: st.intent === 'accuse', day: st.day });
     g.obs[h].push({ f: 'stance_pass', v: st.intent === 'pass' || st.intent === 'skip', day: st.day });

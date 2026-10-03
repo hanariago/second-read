@@ -52,6 +52,13 @@ export const FEATURES = {
     nowYes: '오늘도 말없이 넘김',
     nowNo: '오늘은 입을 열었고',
   },
+  deny_when_accused: {
+    label: '의심받으면 해명',
+    yes: '의심받자 자기는 아니라고 해명했다',
+    no: '의심받고도 해명하지 않았다',
+    nowYes: '오늘도 의심받자마자 해명',
+    nowNo: '오늘은 해명 없이 넘어감',
+  },
   victim_accuser: {
     label: '나를 의심한 사람이 밤에 제거됨',
     yes: '밤 희생자가 낮에 당신을 의심했던 사람이었다',

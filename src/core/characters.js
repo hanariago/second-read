@@ -64,8 +64,8 @@ export const CHARACTERS = [
       grudge: 0.6,
       trustSeer: 0.8,
     },
-    watches: ['vote_retaliate', 'victim_accuser'],
-    watchLabel: '보복 패턴',
+    watches: ['vote_retaliate', 'victim_accuser', 'deny_when_accused'],
+    watchLabel: '반격과 해명',
     color: '#4fb39a',
   },
 ];
