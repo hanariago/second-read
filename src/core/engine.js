@@ -40,9 +40,9 @@ export function roleForGame(n, pastGames, rng) {
 }
 
 // 7+ seats: two mafia who know each other; 6+ seats add a doctor.
-// Multiplayer rooms fill to 7-8 seats with up to 6 rivals.
+// Rooms fill to 7 seats (8 with four people); at least 4 rivals so people can hide among them.
 export function aiCountFor(humans) {
-  return Math.max(4, Math.min(CHARACTERS.length, 8 - humans));
+  return Math.max(4, Math.min(CHARACTERS.length, 7 - humans));
 }
 
 export function roleDeck(seatCount) {

@@ -311,7 +311,8 @@ export function setupMulti(ctx) {
 
   // Writes this player's share of rival lines with their own ChatGPT plan.
   async function renderForRoom(m) {
-    const ctxR = { mode: 'multi', nameOf: (id) => m.names[id] ?? id, chat: m.chat, style: styleForPrompt(S.profile.style), allowNumbers: [Object.keys(m.names).length] };
+    // Short casual "pass" lines read like people as templates; only real moves use the plan.
+    const ctxR = { mode: 'multi', nameOf: (id) => m.names[id] ?? id, chat: m.chat, style: styleForPrompt(S.profile.style), allowNumbers: [Object.keys(m.names).length], useModel: (sp) => sp.intent !== 'pass' };
     const lines = await renderLines(m.scene, m.specs, 'multi', ctxR);
     send({ t: 'lines', reqId: m.reqId, lines: lines.map((l) => ({ speaker: l.speaker, text: l.text })) });
     if (!S.aiOn) send({ t: 'render_status', canRender: false });

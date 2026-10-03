@@ -1,7 +1,7 @@
 {
   "name": "second-read",
   "productName": "Second Read",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AI 라이벌이 판을 넘어 당신의 습관(텔)을 기억하는 턴제 마피아 게임. ChatGPT 플랜으로 동작.",
   "license": "MIT",
   "author": "Second Read contributors",
