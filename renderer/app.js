@@ -91,7 +91,7 @@ function handleFatal(err) {
 
 function showUsageLimit() {
   showModal(`
-    <div class="modal-logo"><img src="../assets/chatgpt-logo-white.svg" alt="ChatGPT" /></div>
+    <div class="modal-logo"><img src="../assets/chatgpt-logo-black.svg" alt="ChatGPT" /></div>
     <h2>Usage limit reached</h2>
     <p>ChatGPT 플랜 또는 이 앱에 설정된 사용 한도에 도달했어요. ChatGPT 설정에서 한도를 확인하세요.</p>
     <div class="row col">
@@ -187,7 +187,7 @@ async function signIn(opts = {}) {
   renderTitle();
   if (S.auth.showPlanWelcome && S.auth.planEnabled) {
     showModal(`
-      <div class="modal-logo"><img src="../assets/chatgpt-logo-white.svg" alt="ChatGPT" /></div>
+      <div class="modal-logo"><img src="../assets/chatgpt-logo-black.svg" alt="ChatGPT" /></div>
       <h2>You're using your ChatGPT plan</h2>
       <p>Second Read에서 AI 라이벌의 대사는 당신의 ChatGPT 플랜 사용량으로 생성됩니다. 사용량과 이 앱의 한도는 ChatGPT 설정에서 관리할 수 있어요.</p>
       <div class="row col"><button class="primary" data-act="planWelcomeOk">Got it</button><button class="link" data-open="${USAGE_URL}">Manage usage</button></div>`);
@@ -243,7 +243,7 @@ function feedItemHtml(it) {
     : '';
   return `<div class="line ${it.speaker === HUMAN_ID ? 'me' : ''} ${it.memory ? 'memory' : ''}">
     <img src="${portrait(it.speaker)}" alt="" />
-    <div class="bubble"><div class="who" style="color:${c?.color ?? '#d9a441'}">${esc(displayName(it.speaker))}${it.final ? '<span class="tag final">최후 변론</span>' : ''}${it.memory ? '<span class="tag">기억</span>' : ''}</div>
+    <div class="bubble"><div class="who" style="color:${c?.color ?? '#b7791f'}">${esc(displayName(it.speaker))}${it.final ? '<span class="tag final">최후 변론</span>' : ''}${it.memory ? '<span class="tag">기억</span>' : ''}</div>
     <div class="text">${esc(it.text)}</div>${ev}</div></div>`;
 }
 
@@ -573,7 +573,7 @@ async function openSettings() {
     <div class="drawer-head"><h2>설정</h2><button class="icon-btn" data-act="closeSettings" aria-label="닫기">✕</button></div>
     <section><h3>ChatGPT 계정</h3>
       ${a.signedIn ? `<p>${esc(a.account?.label || '')}${a.account?.email ? `<br/><span class="muted">${esc(a.account.email)}</span>` : ''}</p>
-        ${a.planEnabled ? `<div class="plan-inline"><img src="../assets/chatgpt-logo-white.svg" alt="" />Using ChatGPT plan <button class="link" data-open="${USAGE_URL}">Manage usage</button></div>` : `<p class="warn">ChatGPT 플랜 사용이 허용되지 않았습니다.</p>${chatgptButton('Continue with ChatGPT', 'reconsent')}`}
+        ${a.planEnabled ? `<div class="plan-inline"><img src="../assets/chatgpt-logo-black.svg" alt="" />Using ChatGPT plan <button class="link" data-open="${USAGE_URL}">Manage usage</button></div>` : `<p class="warn">ChatGPT 플랜 사용이 허용되지 않았습니다.</p>${chatgptButton('Continue with ChatGPT', 'reconsent')}`}
         <div class="row"><button class="ghost" data-act="signOut">로그아웃</button><button class="ghost" data-act="signInNew">다른 계정 추가</button></div>`
         : `<p class="muted">로그인하지 않음</p>${chatgptButton()}`}
     </section>
