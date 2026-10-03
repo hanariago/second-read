@@ -68,6 +68,38 @@ export const CHARACTERS = [
     watchLabel: '반격과 해명',
     color: '#4fb39a',
   },
+  {
+    id: 'kai',
+    name: '카이',
+    title: '수다쟁이 팟캐스터',
+    personality: {
+      summary: '말이 많고 과장한다. 분위기에 잘 올라탄다.',
+      voice: '반말, 과장된 리액션, 유행어 섞음',
+      aggression: 0.55,
+      temperature: 0.7,
+      grudge: 0.35,
+      trustSeer: 0.85,
+    },
+    watches: ['vote_follow', 'round_skip'],
+    watchLabel: '눈치와 침묵',
+    color: '#d96b2b',
+  },
+  {
+    id: 'noa',
+    name: '노아',
+    title: '야간 응급실 간호사',
+    personality: {
+      summary: '차분하고 공감형. 몰리는 사람 편을 들어준다.',
+      voice: '부드러운 존댓말, 걱정하는 말투',
+      aggression: 0.85,
+      temperature: 0.5,
+      grudge: 0.15,
+      trustSeer: 0.9,
+    },
+    watches: ['deny_when_accused', 'victim_accuser'],
+    watchLabel: '해명과 밤의 흔적',
+    color: '#7a6bd1',
+  },
 ];
 
 export const charById = Object.fromEntries(CHARACTERS.map((c) => [c.id, c]));

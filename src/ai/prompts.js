@@ -51,6 +51,8 @@ const CASUAL_HINTS = {
   mio: 'ㅋㅋ나 감탄사를 자주 씀, 반응 빠름',
   bruno: '퉁명한 반말, 단정적',
   sera: '살짝 존댓말 섞음, 차분하게 찌름',
+  kai: '리액션 크고 유행어, 느낌표',
+  noa: '부드럽고 걱정하는 말투, 존댓말 섞음',
 };
 
 export function sceneSummary(g, nameOf = displayName) {

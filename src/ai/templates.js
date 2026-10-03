@@ -76,6 +76,31 @@ const V = {
   },
 };
 
+V.kai = {
+  accuse: ['와 {t} 진짜 수상하다 레전드네', '{t} 이거 각 나왔다!'],
+  defend: ['{t}는 찐 시민 바이브임', '{t} 건드리면 안 돼~'],
+  pass: ['아 노잼, 아직 감이 안 와', '다들 텐션 왜 이래 일단 보자'],
+  claimMafia: ['나 예언자다! {t} 마피아 떴어!'],
+  claimTown: ['나 예언자임, {t}는 시민 확정!'],
+  memory: ['{ev}. 이거 완전 패턴이잖아!', '{ev}. 소름 돋았다 진짜'],
+  clear: ['{ev}. 시민 때랑 똑같네 패스!'],
+  asideSuspect: ['{ev}. 와 이거 각인데?'],
+  asideClear: ['{ev}. 오 이번엔 다르네?'],
+  deny: ['나? 에이 말도 안 돼!'],
+};
+V.noa = {
+  accuse: ['{t} 님, 조금 걱정되는 부분이 있어요.', '{t} 님 말씀이 계속 마음에 걸려요.'],
+  defend: ['{t} 님을 너무 몰아붙이는 것 같아요.', '{t} 님은 아닐 거예요, 제 느낌엔.'],
+  pass: ['다들 조금만 천천히 얘기해 봐요.', '아직은 누구도 확신이 안 서요.'],
+  claimMafia: ['제가 예언자예요. {t} 님, 마피아로 나왔어요.'],
+  claimTown: ['제가 예언자예요. {t} 님은 시민이었어요.'],
+  memory: ['{ev}. 그때도 그러셨던 거 기억나요.', '{ev}. 조심스럽지만 같은 모습이에요.'],
+  clear: ['{ev}. 시민일 때 모습 그대로예요.'],
+  asideSuspect: ['{ev}... 마음에 걸리네요.'],
+  asideClear: ['{ev}. 다행이에요.'],
+  deny: ['저는 정말 아니에요. 믿어 주세요.'],
+};
+
 // Multiplayer: rivals must read like people in a group chat, so the fallback
 // lines are short, casual and identical in tone for every seat.
 const CASUAL = {
@@ -100,6 +125,8 @@ function casualLine(spec, s, nameOf) {
 }
 
 const REMARK_EMPTY = {
+  kai: '아직 너 분석 덜 됐다~ 다음 판 기대해!',
+  noa: '아직 잘 모르겠어요. 다음 판에 또 봬요.',
   leon: '아직 표본이 부족합니다. 다음 판에 다시 계산하죠.',
   mio: '아직 너 잘 모르겠어! 다음 판에 또 보자~',
   bruno: '흠. 아직 꼬리를 못 잡았군. 다음엔 잡는다.',
@@ -111,6 +138,7 @@ const REMARK_EMPTY = {
 function evidenceSentence(evidence) {
   const byF = new Map();
   for (const e of evidence) {
+    if (!e.f) continue;
     if (!byF.has(e.f)) byF.set(e.f, []);
     byF.get(e.f).push(e);
   }

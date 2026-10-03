@@ -1,5 +1,5 @@
 // Game UI. All input is clicks; the engine decides, dialogue only renders.
-import { createGame, act, gameRecord, publicView, setLineText, ROLE_KO } from '../src/core/engine.js';
+import { createGame, act, gameRecord, publicView, setLineText, mafiaTeam, ROLE_KO } from '../src/core/engine.js';
 import { parseIntent } from '../src/core/intent.js';
 import { CHARACTERS, HUMAN_ID, charById, displayName } from '../src/core/characters.js';
 import { nextGameNumber, addGame, rivalReport, remarkSpecs, tallies, emptyProfile } from '../src/core/profile.js';
@@ -15,7 +15,8 @@ const store = bridge ? createBridgeStore(bridge) : createLocalStorageStore();
 const USAGE_URL = 'https://chatgpt.com/settings/usage';
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Once the player is out, the rest of the game plays fast.
+const sleep = (ms) => new Promise((r) => setTimeout(r, S.game && !publicView(S.game).players.find((p) => p.id === HUMAN_ID)?.alive ? Math.min(ms, 60) : ms));
 const portrait = (id) => `../assets/${id === HUMAN_ID ? 'you' : id}.svg`;
 
 const S = {
@@ -160,7 +161,7 @@ function renderTitle(msg = '') {
     ${S.profile.games.length ? `<div class="tally"><span>지금까지 ${S.profile.games.length}판</span><span class="read">읽힘 ${t.caught}</span><span class="bluff">속임 ${t.bluffs}</span>${S.profile.settings.memory ? '' : '<span class="off">기억 꺼짐</span>'}</div>
     <button class="link" data-act="lastReport">AI가 본 당신 (지난 판까지)</button>` : ''}
     <ul class="howto">
-      <li>5명 중 1명이 마피아. 낮에 한 마디 하고, 투표로 1명을 처형합니다. 판은 최대 2일, 5분 안쪽.</li>
+      <li>7명 중 마피아 2명(서로를 앎), 예언자·의사 1명씩. 낮에 두 번 말하고 투표, 최다 득표자는 최후 변론 뒤 찬반으로 처형. 4일이 지나면 마피아 승리.</li>
       <li>라이벌 4명은 각자 다른 습관을 지켜봅니다. 판이 쌓이면 지난 판의 당신을 근거로 의심하거나 믿습니다.</li>
       <li>읽혔다 싶으면 습관을 바꿔서 속이세요. 속인 횟수도 기록됩니다.</li>
     </ul>
@@ -209,7 +210,15 @@ function newGame() {
   updateBadges();
   renderGame();
   const role = S.game.humanRole;
-  const goal = role === 'mafia' ? '들키지 않고 끝까지 살아남으세요. 밤마다 한 명을 제거합니다.' : role === 'seer' ? '밤마다 한 명의 정체를 조사합니다. 마피아를 투표로 처형하세요.' : '마피아 1명을 찾아 투표로 처형하세요.';
+  const partners = mafiaTeam(S.game, HUMAN_ID);
+  const goal =
+    role === 'mafia'
+      ? `동료 ${partners.map((x) => displayName(x)).join(', ')}와 함께 들키지 않고 살아남으세요. 밤마다 한 명을 제거합니다.`
+      : role === 'seer'
+        ? '밤마다 한 명의 정체를 조사합니다. 마피아 2명을 투표로 처형하세요.'
+        : role === 'doctor'
+          ? '밤마다 한 명을 지킵니다(자신도 가능). 마피아 2명을 찾아내세요.'
+          : '마피아 2명을 찾아 투표로 처형하세요.';
   const firstTime = n <= 2;
   showModal(`
     <div class="role-card ${role}">
@@ -290,9 +299,15 @@ function refreshSeats() {
 
 // Plan usage goes only to lines the player feels: aimed at them, citing memory,
 // final words, or answering something they said. Rival-vs-rival talk uses templates.
+// A hard cap per game; plain accusations of the player only get the model early on.
+const MODEL_BUDGET = 4;
 function worthModel(g, sp) {
-  if (sp.target === HUMAN_ID || sp.evidence?.length || sp.final) return true;
+  const used = S.gm?.modelBatches ?? 0;
+  if (used >= MODEL_BUDGET) return false;
+  if (!g.players.find((p) => p.id === HUMAN_ID)?.alive) return false; // spectating: no plan usage
+  if (sp.evidence?.length || sp.final) return true;
   if (sp.intent === 'deny') return (g.statements[sp.day] || []).some((s) => s.speaker === HUMAN_ID && s.intent === 'accuse' && s.target === sp.speaker);
+  if (sp.target === HUMAN_ID) return used < 2;
   return false;
 }
 
@@ -382,6 +397,7 @@ function renderActions() {
   } else if (p.type === 'night') {
     if (p.action === 'kill') el.innerHTML = `<div class="act-title">밤 · 제거할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else if (p.action === 'check') el.innerHTML = `<div class="act-title">밤 · 정체를 조사할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
+    else if (p.action === 'protect') el.innerHTML = `<div class="act-title">밤 · 오늘 밤 지킬 사람을 고르세요 <span class="muted">(자신도 가능)</span></div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else el.innerHTML = `<div class="act-title">밤 · 시민은 잠듭니다</div><div class="act-row"><button class="primary" data-act="sleep">잠들기</button></div>`;
   } else if (p.type === 'spectate') {
     el.innerHTML = `<div class="act-title">당신은 탈락했습니다</div><div class="act-row"><button class="primary" data-act="spectate">남은 판 결과 보기</button></div>`;
@@ -419,7 +435,9 @@ async function processEvents(events) {
       i--;
       const specs = batch.map((e) => ({ speaker: e.speaker, intent: e.intent, target: e.target, result: e.result, evidence: e.evidence, day: e.day, final: e.final }));
       pushFeed({ kind: 'system', text: `${batch.map((b) => displayName(b.speaker)).join(', ')} 생각 중…` });
-      const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`, { mode: 'single', chat: todayChat(g), useModel: (sp) => worthModel(g, sp) });
+      const worth = specs.map((sp) => worthModel(g, sp));
+      if (S.gm && S.aiOn && worth.some(Boolean)) S.gm.modelBatches = (S.gm.modelBatches ?? 0) + 1;
+      const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`, { mode: 'single', chat: todayChat(g), useModel: (sp) => worth[specs.indexOf(sp)] });
       for (let k = 0; k < batch.length; k++) {
         setLineText(g, batch[k], lines[k].text);
         pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length, final: batch[k].final });
@@ -451,7 +469,8 @@ async function processEvents(events) {
     } else if (ev.t === 'spared') {
       pushFeed({ kind: 'system', text: `찬성 ${ev.yes} : 반대 ${ev.no} — ${withName('{t}는', ev.target)} 살아남았습니다.` });
     } else if (ev.t === 'night') {
-      pushFeed({ kind: 'system', text: `밤사이 ${displayName(ev.victim)}${ev.victim === HUMAN_ID ? '이' : '가'} 쓰러졌습니다. 정체: ${ROLE_KO[ev.role]}` });
+      if (ev.victim) pushFeed({ kind: 'system', text: `밤사이 ${withName('{t}가', ev.victim)} 쓰러졌습니다. 정체: ${ROLE_KO[ev.role]}` });
+      else pushFeed({ kind: 'system', text: ev.saved ? '조용한 밤이었습니다. 누군가 의사의 손에 살아났습니다.' : '조용한 밤이었습니다.' });
     } else if (ev.t === 'seerResult') {
       pushFeed({ kind: 'private', text: `조사 결과(당신만 봄): ${withName(`{t}는 ${ev.result === 'mafia' ? '마피아' : '시민'}입니다.`, ev.target)}` });
     } else if (ev.t === 'phase') {
@@ -461,7 +480,7 @@ async function processEvents(events) {
       if (ev.phase === 'statement' && ev.day > 1 && ev.round === 1) pushFeed({ kind: 'system', text: `${ev.day}일차 낮.` });
       if (ev.phase === 'statement' && ev.round > 1) pushFeed({ kind: 'system', text: `${ev.round}라운드 — 방금 말에 반응할 차례.` });
     } else if (ev.t === 'over') {
-      pushFeed({ kind: 'system', text: ev.winner === 'town' ? '시민 승리' : '마피아 승리' });
+      pushFeed({ kind: 'system', text: ev.timeout ? '4일이 지났습니다 — 마피아가 끝까지 숨어 승리' : ev.winner === 'town' ? '시민 승리' : '마피아 승리' });
     }
   }
 }

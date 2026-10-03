@@ -28,7 +28,7 @@ app.whenReady().then(async () => {
     await wait(300);
     await shot(`g${gnum}-0-role`);
     await click('[data-act="closeModal"]');
-    for (let step = 0; step < 40; step++) {
+    for (let step = 0; step < 120; step++) {
       await wait(250);
       if (await has('.report')) break;
       const mafia = await has('.my-role.mafia');

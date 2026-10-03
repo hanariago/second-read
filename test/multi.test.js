@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createMatch, openRound, submit, close, waitingOn, humanOptions, gameRecord } from '../src/core/engine.js';
+import { createMatch, openRound, submit, close, waitingOn, humanOptions, gameRecord, aiCountFor } from '../src/core/engine.js';
+import { CHARACTERS } from '../src/core/characters.js';
 import { parseIntent } from '../src/core/intent.js';
 import { learnStyle, emptyStyle, styleForPrompt } from '../src/core/style.js';
 import { checkLine } from '../src/ai/validate.js';
@@ -8,7 +9,8 @@ import { createRng } from '../src/core/rng.js';
 
 function playMatch(nHumans, seed, memory = true, past = {}) {
   const humans = Array.from({ length: nHumans }, (_, i) => ({ id: `h${i + 1}`, n: (past[`h${i + 1}`]?.length || 0) + 1, games: past[`h${i + 1}`] || [] }));
-  const g = createMatch({ mode: 'multi', humans, seed, memory });
+  const aiIds = CHARACTERS.slice(0, aiCountFor(nHumans)).map((c) => c.id);
+  const g = createMatch({ mode: 'multi', humans, seed, memory, aiIds });
   const rng = createRng(seed);
   let guard = 0;
   while (g.phase !== 'over' && guard++ < 60) {
@@ -26,7 +28,7 @@ function playMatch(nHumans, seed, memory = true, past = {}) {
 }
 
 test('multi: seat counts and mafia count scale with humans', () => {
-  for (const [h, seats, mafia] of [[1, 5, 1], [2, 6, 1], [3, 7, 1], [4, 8, 2]]) {
+  for (const [h, seats, mafia] of [[1, 7, 2], [2, 8, 2], [3, 8, 2], [4, 8, 2]]) {
     const g = playMatch(h, 7);
     assert.equal(g.players.length, seats);
     assert.equal(g.players.filter((p) => p.role === 'mafia').length, mafia);

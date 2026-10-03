@@ -167,7 +167,7 @@ export function setupMulti(ctx) {
       if (m.victim) {
         M.alive[m.victim.seat] = false;
         pushFeed({ kind: 'sys', text: `밤사이 ${nameOf(m.victim.seat)} 쓰러짐. 정체: ${ROLE_KO[m.victim.role]}` });
-      }
+      } else pushFeed({ kind: 'sys', text: m.saved ? '조용한 밤. 누군가 의사 덕에 살았다.' : '조용한 밤.' });
       renderSeats();
     } else if (m.t === 'over') finishGame(m);
   }
@@ -191,7 +191,15 @@ export function setupMulti(ctx) {
         <div class="actions" id="actions"></div>
       </section>`;
     renderSeats();
-    const goal = M.role === 'mafia' ? '들키지 않고 살아남으세요.' : M.role === 'seer' ? '밤마다 한 명을 조사합니다.' : '마피아를 찾아 처형하세요.';
+    M.partners = m.partners || [];
+    const goal =
+      M.role === 'mafia'
+        ? `동료: ${M.partners.map((x) => nameOf(x)).join(', ') || '없음'}. 들키지 않고 살아남으세요.`
+        : M.role === 'seer'
+          ? '밤마다 한 명을 조사합니다.'
+          : M.role === 'doctor'
+            ? '밤마다 한 명을 지킵니다.'
+            : '마피아를 찾아 처형하세요.';
     showModal(`<div class="role-card ${M.role}"><div class="role-kicker">내 닉네임 ${esc(nameOf(M.seat))}</div><div class="role-name">${ROLE_KO[M.role]}</div><p>${goal}</p><p class="hint">누가 사람이고 누가 AI인지는 끝날 때 공개됩니다.</p><button class="primary" data-act="closeModal">시작</button></div>`);
     pushFeed({ kind: 'sys', text: '1일차 낮. 각자 쓰고, 다 같이 공개됩니다.' });
   }
@@ -203,7 +211,7 @@ export function setupMulti(ctx) {
       .map(
         (s) => `<div class="seat ${M.alive[s.id] ? '' : 'dead'} ${s.id === M.seat ? 'me' : ''}">
         <div class="nick-avatar" style="background:${M.color[s.id]}">${esc(s.nick.slice(0, 1))}</div>
-        <div class="seat-name">${esc(s.nick)}${s.id === M.seat ? ' <span class="muted small">(나)</span>' : ''}</div></div>`,
+        <div class="seat-name">${esc(s.nick)}${s.id === M.seat ? ' <span class="muted small">(나)</span>' : ''}${M.partners?.includes(s.id) ? ' <span class="role-tag mafia">동료</span>' : ''}</div></div>`,
       )
       .join('');
   }
@@ -277,7 +285,7 @@ export function setupMulti(ctx) {
       el.innerHTML = `<div class="act-title">처형 투표</div><div class="act-row">${targetBtns(o.targets, 'mVote')}</div>`;
     } else if (o.type === 'night') {
       if (o.action === 'sleep') el.innerHTML = `<div class="act-title muted">밤입니다. 잠드는 중…</div>`;
-      else el.innerHTML = `<div class="act-title">${o.action === 'kill' ? '제거할 사람' : '조사할 사람'}</div><div class="act-row">${targetBtns(o.targets, 'mNight')}</div>`;
+      else el.innerHTML = `<div class="act-title">${{ kill: '제거할 사람', check: '조사할 사람', protect: '오늘 밤 지킬 사람 (자신도 가능)' }[o.action]}</div><div class="act-row">${targetBtns(o.targets, 'mNight')}</div>`;
     }
   }
 

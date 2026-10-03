@@ -3,7 +3,7 @@
 // their own ChatGPT plan), and reveals every discussion round at once.
 
 import { DurableObject } from 'cloudflare:workers';
-import { createMatch, openRound, submit, close, waitingOn, humanOptions, gameRecord, setLineText } from '../../src/core/engine.js';
+import { createMatch, openRound, submit, close, waitingOn, humanOptions, gameRecord, setLineText, aiCountFor, mafiaTeam } from '../../src/core/engine.js';
 import { CHARACTERS } from '../../src/core/characters.js';
 import { templateLine, humanLine } from '../../src/ai/templates.js';
 import { sceneSummary, todayChat } from '../../src/ai/prompts.js';
@@ -188,7 +188,8 @@ export class Room extends DurableObject {
     // Rivals skip rounds about as often as people in these rooms do.
     const rates = players.map(([, c]) => c.skipRate).filter((x) => x !== null);
     const aiSkipRate = rates.length ? Math.min(0.5, Math.max(0.05, rates.reduce((a, b) => a + b, 0) / rates.length)) : 0.2;
-    this.g = createMatch({ mode: 'multi', humans, seed: (Math.random() * 2 ** 31) | 0, aiSkipRate });
+    const aiIds = shuffle(CHARACTERS.map((ch) => ch.id)).slice(0, aiCountFor(humans.length));
+    this.g = createMatch({ mode: 'multi', humans, seed: (Math.random() * 2 ** 31) | 0, aiSkipRate, aiIds });
     const ids = this.g.players.map((p) => p.id);
     const nicks = shuffle(NICKS).slice(0, ids.length);
     this.nick = Object.fromEntries(ids.map((id, i) => [id, nicks[i]]));
@@ -196,13 +197,13 @@ export class Room extends DurableObject {
     // Split rivals among players who can write lines with their own ChatGPT plan.
     const renderers = shuffle(players.filter(([, c]) => c.canRender).map(([p]) => p));
     this.owners = {};
-    CHARACTERS.forEach((ch, i) => (this.owners[ch.id] = renderers.length ? renderers[i % renderers.length] : null));
+    aiIds.forEach((id, i) => (this.owners[id] = renderers.length ? renderers[i % renderers.length] : null));
     this.humanTexts = [];
     this.lineStats = { total: 0, fallback: 0 };
     const seats = shuffle(ids).map((id) => ({ id, nick: this.nick[id] }));
     for (const [p, c] of players) {
       const me = this.g.players.find((x) => x.id === c.seat);
-      this.send(p, { t: 'started', you: c.seat, role: me.role, seats, rounds: this.g.rounds, timers: this.T });
+      this.send(p, { t: 'started', you: c.seat, role: me.role, partners: mafiaTeam(this.g, c.seat), seats, rounds: this.g.rounds, timers: this.T });
     }
     this.openStatement();
   }
@@ -452,7 +453,7 @@ export class Room extends DurableObject {
       if (ev.t === 'seerResult') this.send(this.pidOfSeat(ev.seer), { t: 'seer_result', target: ev.target, result: ev.result });
     }
     const night = events.find((e) => e.t === 'night');
-    this.broadcast({ t: 'night_result', day: night?.day, victim: night ? { seat: night.victim, role: night.role } : null });
+    this.broadcast({ t: 'night_result', day: night?.day, victim: night?.victim ? { seat: night.victim, role: night.role } : null, saved: !!night?.saved });
     if (g.phase === 'over') return this.finishGame();
     this.openStatement();
   }

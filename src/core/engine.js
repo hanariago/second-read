@@ -12,11 +12,12 @@ import { createRng } from './rng.js';
 import { CHARACTERS, HUMAN_ID, charById } from './characters.js';
 import { buildTellModel, tellTerm, evidenceForTerm, roleSide } from './tells.js';
 
-export const ROLE_KO = { mafia: '마피아', seer: '예언자', villager: '시민' };
+export const ROLE_KO = { mafia: '마피아', seer: '예언자', doctor: '의사', villager: '시민' };
 
-const HERD = { leon: 0.2, mio: 0.4, bruno: -0.1, sera: 0.15 };
+const HERD = { leon: 0.2, mio: 0.4, bruno: -0.1, sera: 0.15, kai: 0.5, noa: 0.1 };
 const EVIDENCE_THRESHOLD = 0.35; // |tell term| needed before a rival cites memory
-export const AI_SKIP_RATE = 0.2; // multi: humans skip rounds, so rivals sometimes do too
+export const AI_SKIP_RATE = 0.2;
+export const MAX_DAYS = 4; // if the town hasn't caught everyone by then, the mafia wins // multi: humans skip rounds, so rivals sometimes do too
 
 // First single-player games are scheduled so both roles get observed quickly:
 // tells are role differences, so the AI needs at least one game of each.
@@ -33,16 +34,24 @@ export function roleForGame(n, pastGames, rng) {
     else side = rng.next() < 0.45 ? 'mafia' : 'town';
   }
   if (side === 'mafia') return 'mafia';
-  return rng.next() < 0.3 ? 'seer' : 'villager';
+  const r = rng.next();
+  return r < 0.25 ? 'seer' : r < 0.45 ? 'doctor' : 'villager';
+}
+
+// 7+ seats: two mafia who know each other; 6+ seats add a doctor.
+// Multiplayer rooms fill to 7-8 seats with up to 6 rivals.
+export function aiCountFor(humans) {
+  return Math.max(4, Math.min(CHARACTERS.length, 8 - humans));
 }
 
 export function roleDeck(seatCount) {
-  const mafia = seatCount >= 8 ? 2 : 1;
-  return [...Array(mafia).fill('mafia'), 'seer', ...Array(seatCount - mafia - 1).fill('villager')];
+  const mafia = seatCount >= 7 ? 2 : 1;
+  const doctor = seatCount >= 6 ? 1 : 0;
+  return [...Array(mafia).fill('mafia'), 'seer', ...Array(doctor).fill('doctor'), ...Array(seatCount - mafia - 1 - doctor).fill('villager')];
 }
 
 // Single-player game (kept as the original entry point).
-export function createGame({ n, pastGames = [], memory = true, seed = Date.now(), forceRole = null, rounds = 2, aiSkipRate = 0 }) {
+export function createGame({ n, pastGames = [], memory = true, seed = Date.now(), forceRole = null, rounds = 2, aiSkipRate = 0, aiIds = null }) {
   const rng = createRng(seed);
   const humanRole = forceRole ?? roleForGame(n, pastGames, rng);
   return createMatch({
@@ -53,15 +62,16 @@ export function createGame({ n, pastGames = [], memory = true, seed = Date.now()
     rng,
     rounds,
     aiSkipRate,
+    aiIds,
   });
 }
 
 // General entry point. humans: [{ id, n, games, role? }] (games = that player's
 // own past records, supplied by their device for this game only).
-export function createMatch({ mode = 'multi', humans, memory = true, seed = Date.now(), rng = null, rounds = 2, aiSkipRate = AI_SKIP_RATE }) {
+export function createMatch({ mode = 'multi', humans, memory = true, seed = Date.now(), rng = null, rounds = 2, aiSkipRate = AI_SKIP_RATE, aiIds = null }) {
   rng = rng ?? createRng(seed);
   const humanIds = humans.map((h) => h.id);
-  const aiIds = CHARACTERS.map((c) => c.id);
+  aiIds = aiIds ?? CHARACTERS.map((c) => c.id);
   const ids = [...humanIds, ...aiIds];
   const deck = roleDeck(ids.length);
   const roles = {};
@@ -144,6 +154,7 @@ const isHuman = (g, id) => g.humanIds.includes(id);
 const aliveHumans = (g) => g.humanIds.filter((id) => isAlive(g, id));
 const mafiaIds = (g) => g.players.filter((p) => p.role === 'mafia').map((p) => p.id);
 const seerId = (g) => g.players.find((p) => p.role === 'seer').id;
+export const mafiaTeam = (g, h) => (player(g, h)?.role === 'mafia' ? mafiaIds(g).filter((id) => id !== h) : []);
 
 function accusersOf(g, day, target) {
   return (g.statements[day] || []).filter((s) => s.intent === 'accuse' && s.target === target).map((s) => s.speaker);
@@ -294,6 +305,7 @@ function nightAction(g, id) {
     const unchecked = others.filter((t) => !g.seerChecks.some((x) => x.seer === id && x.target === t));
     return { type: 'night', action: 'check', targets: unchecked.length ? unchecked : others };
   }
+  if (role === 'doctor') return { type: 'night', action: 'protect', targets: aliveIds(g) };
   return { type: 'night', action: 'sleep', targets: [] };
 }
 
@@ -570,8 +582,8 @@ function aiVerdict(g, cid) {
     const others = scores.filter((x) => x.t !== target);
     const bestOther = Math.max(-9, ...others.map((x) => x.total));
     const bestOtherNo = Math.max(-9, ...others.map((x) => x.base));
-    yes = accused.total + noise > bestOther - 0.2;
-    yesNoTell = accused.base + noise > bestOtherNo - 0.2;
+    yes = accused.total + noise > bestOther - 0.5;
+    yesNoTell = accused.base + noise > bestOtherNo - 0.5;
   }
   g.trial.verdicts.push({ voter: cid, yes });
   emit(g, { t: 'verdict', voter: cid, yes, day });
@@ -604,6 +616,12 @@ function resolveVerdict(g) {
 function finishVerdictsWithAI(g) {
   for (const id of aliveIds(g)) if (!isHuman(g, id) && id !== g.trial.target) aiVerdict(g, id);
   resolveVerdict(g);
+}
+
+function endByTime(g) {
+  g.winner = 'mafia';
+  g.phase = 'over';
+  emit(g, { t: 'over', winner: 'mafia', timeout: true, humanWon: roleSide(g.humanRole) === 'mafia', roles: Object.fromEntries(g.players.map((p) => [p.id, p.role])) });
 }
 
 function checkWin(g) {
@@ -648,6 +666,23 @@ function resolveNight(g, picks) {
       victim = cands.map((t) => ({ t, s: score(t) })).sort((a, b) => b.s - a.s)[0]?.t ?? null;
     }
   }
+  // The doctor's patient survives the night.
+  const doc = g.players.find((p) => p.role === 'doctor' && p.alive);
+  let protectedId = null;
+  if (doc) {
+    if (isHuman(g, doc.id)) protectedId = picks[doc.id] ?? null;
+    else {
+      const claimer = (g.statements[d] || []).find((st) => st.intent === 'claim' && isAlive(g, st.speaker) && st.speaker !== doc.id)?.speaker;
+      if (claimer && g.rng.next() < 0.7) protectedId = claimer;
+      else if (g.rng.next() < 0.3) protectedId = doc.id;
+      else {
+        const trust = aliveIds(g).filter((t) => t !== doc.id).map((t) => ({ t, s: suspicion(g, doc.id, t).total + g.rng.gumbel() * 0.4 })).sort((a, b) => a.s - b.s)[0];
+        protectedId = trust?.t ?? doc.id;
+      }
+    }
+  }
+  const saved = victim && victim === protectedId;
+  if (saved) victim = null;
   const sid = seerId(g);
   if (isAlive(g, sid)) {
     if (!isHuman(g, sid)) {
@@ -671,8 +706,9 @@ function resolveNight(g, picks) {
       if (accusers.length) g.obs[h].push({ f: 'victim_accuser', v: accusers.includes(victim), day: d });
     }
     emit(g, { t: 'night', victim, role: p.role, day: d });
-  }
+  } else emit(g, { t: 'night', victim: null, saved, day: d });
   if (checkWin(g)) return;
+  if (d >= MAX_DAYS) return endByTime(g);
   g.day += 1;
   g.round = 1;
   g.phase = 'statement';
@@ -895,7 +931,7 @@ export function publicView(g, h = HUMAN_ID) {
     players: g.players.map((p) => ({
       id: p.id,
       alive: p.alive,
-      role: p.id === h || !p.alive || g.phase === 'over' ? p.role : null,
+      role: p.id === h || !p.alive || g.phase === 'over' || (p.role === 'mafia' && player(g, h)?.role === 'mafia') ? p.role : null,
     })),
     votes: g.votes[g.day] ? g.votes[g.day].slice() : [],
     pending: g.pending,

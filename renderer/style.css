@@ -67,8 +67,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .my-role { font-weight: 700; padding: 2px 10px; border-radius: 999px; background: var(--panel-2); }
 .my-role.mafia { color: var(--mafia); }
 .my-role.seer { color: var(--seer); }
-.my-role.villager { color: var(--town); }
-.seats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.my-role.villager, .my-role.doctor { color: var(--town); }
+.seats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
 .seat { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; text-align: center; position: relative; min-height: 150px; }
 .seat.me { border-color: #e8cf9c; }
 .seat img { width: 58px; height: 58px; border-radius: 12px; }
@@ -84,7 +84,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .role-tag { font-size: 11px; padding: 1px 6px; border-radius: 6px; margin-left: 4px; font-weight: 600; background: var(--panel-2); }
 .role-tag.mafia { color: var(--mafia); }
 .role-tag.seer { color: var(--seer); }
-.role-tag.villager { color: var(--town); }
+.role-tag.villager, .role-tag.doctor { color: var(--town); }
 
 .feed { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; overflow-y: auto; min-height: 120px; }
 .sys { color: var(--muted); font-size: 13px; margin: 6px 0; }
@@ -124,7 +124,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .role-card .role-name { font-size: 40px; font-weight: 800; margin: 6px 0 4px; }
 .role-card.mafia .role-name { color: var(--mafia); }
 .role-card.seer .role-name { color: var(--seer); }
-.role-card.villager .role-name { color: var(--town); }
+.role-card.villager .role-name, .role-card.doctor .role-name { color: var(--good); }
 
 /* report */
 .report { max-width: 1100px; margin: 0 auto; padding: 24px; }

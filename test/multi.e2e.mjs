@@ -151,7 +151,7 @@ try {
     check(!!anyReveal && anyReveal.messages.some((m) => m.text.startsWith('ai-')), '3p: rival lines come from the assigned player');
     check(live[0].renderReqs > 0 && live[1].renderReqs === 0, '3p: only players with a ChatGPT plan get render requests');
     const reveal = live[0].over.reveal;
-    check(reveal.filter((r) => r.human).length === 3 && reveal.length === 7, '3p: final reveal shows 3 humans among 7 seats');
+    check(reveal.filter((r) => r.human).length === 3 && reveal.length === 8, '3p: final reveal shows 3 humans among 8 seats');
     check(live[0].over.humanTexts.length > 0, '3p: human lines are sent back for style learning');
     check(live.every((c) => (c.defenses || 0) > 0), '3p: every vote goes to final words before the verdict');
     void seats;

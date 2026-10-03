@@ -172,6 +172,6 @@ test('report remarks only carry evidence that matches the profile', () => {
   for (const r of past) profile = addGame(profile, r);
   const report = rivalReport(profile, past[3]);
   const specs = remarkSpecs(report);
-  assert.equal(specs.length, 4);
+  assert.equal(specs.length, 6);
   for (const sp of specs) for (const e of sp.evidence) assert.ok(e.text.length > 0);
 });
