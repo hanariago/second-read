@@ -31,11 +31,16 @@ export function createDialogue({ transport = null, timeoutMs = 10000, onMetric =
     if (!specs.length) return [];
     const casual = ctx.mode === 'multi';
     const allowNumbers = [...(ctx.allowNumbers || []), ...(ctx.chat || []).flatMap((c) => (c.says.match(/\d+/g) || []).map(Number))];
+    // ctx.useModel(spec) limits model calls to lines worth the plan usage;
+    // everything else is a template, and a batch with nothing worth it costs nothing.
+    const worth = specs.map((s) => !ctx.useModel || ctx.useModel(s));
+    const modelSpecs = specs.filter((_, i) => worth[i]);
     let parsed = null;
-    if (transport) parsed = await callModel(buildLinesRequest(scene, specs, ctx), label);
+    if (transport && modelSpecs.length) parsed = await callModel(buildLinesRequest(scene, modelSpecs, ctx), label);
     const got = Array.isArray(parsed?.lines) ? parsed.lines : [];
     let rejected = 0;
     const out = specs.map((spec, i) => {
+      if (!worth[i]) return { speaker: spec.speaker, text: templateLine(spec, i, { nameOf: ctx.nameOf, casual }), source: 'template', reason: 'not-worth-model' };
       const line = got.find((l) => l?.speaker_id === spec.speaker);
       const why = parsed ? checkLine(spec, line, { nameOf: ctx.nameOf, allowNumbers }) : 'no-model';
       if (why) {
@@ -44,7 +49,7 @@ export function createDialogue({ transport = null, timeoutMs = 10000, onMetric =
       }
       return { speaker: spec.speaker, text: line.text.trim(), source: 'ai', evidenceIds: line.evidence_ids };
     });
-    if (parsed) onMetric({ label: `${label}:validation`, ok: true, rejected, total: specs.length });
+    if (parsed) onMetric({ label: `${label}:validation`, ok: true, rejected, total: modelSpecs.length });
     return out;
   }
 

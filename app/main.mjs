@@ -71,6 +71,8 @@ const errOut = (e) => ({
   error: { code: e?.code || e?.name || 'error', fatal: !!e?.fatal || e?.code === 'reauth_required' || e?.code === 'signed_out' || e?.code === 'plan_not_enabled', message: e?.message, requestId: e?.requestId ?? null },
 });
 
+const EFFORT_LADDER = ['minimal', 'low'];
+
 async function complete(id, req) {
   const ctrl = new AbortController();
   inflight.set(id, ctrl);
@@ -80,16 +82,26 @@ async function complete(id, req) {
     const s = await settings();
     const dropped = new Set(s.dropped?.[model] || []);
     let refreshed = false;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      // Low reasoning effort keeps rival lines fast; dropped automatically if the model rejects it.
-      const extra = dropped.has('reasoning') ? {} : { reasoning: { effort: 'low' } };
+    for (let attempt = 0; attempt < 5; attempt++) {
+      // Lowest reasoning effort the model accepts keeps lines fast and cheap: minimal -> low -> omitted.
+      const effort = EFFORT_LADDER[s.effortStep?.[model] ?? 0];
+      const extra = effort ? { reasoning: { effort } } : {};
       const schema = dropped.has('text') ? null : req.schema;
       try {
         const res = await streamResponse({ token, model, instructions: req.instructions, input: req.input, schema, extra, signal: ctrl.signal });
         return { ok: true, ...res };
       } catch (e) {
         const top = String(e.param ?? '').split('.')[0];
-        const droppable = ['reasoning', 'text'].includes(top) && !dropped.has(top);
+        if (top === 'reasoning' && (e.code === 'subscription_sharing_unsupported_capability' || e.status === 400)) {
+          const step = (s.effortStep?.[model] ?? 0) + 1;
+          if (step < EFFORT_LADDER.length + 1) {
+            s.effortStep = { ...(s.effortStep || {}), [model]: step };
+            await patchSettings({ effortStep: s.effortStep });
+            log('reasoning effort step', step);
+            continue;
+          }
+        }
+        const droppable = top === 'text' && !dropped.has(top);
         if (droppable && (e.code === 'subscription_sharing_unsupported_capability' || e.status === 400)) {
           dropped.add(top);
           await patchSettings({ dropped: { ...(s.dropped || {}), [model]: [...dropped] } });

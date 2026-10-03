@@ -288,6 +288,14 @@ function refreshSeats() {
   if (ph && S.game) ph.textContent = `${S.game.day}일차 ${{ statement: '낮 · 발언', vote: '낮 · 투표', defense: '낮 · 최후 변론', verdict: '낮 · 찬반 투표', night: '밤', over: '종료' }[S.game.phase]}`;
 }
 
+// Plan usage goes only to lines the player feels: aimed at them, citing memory,
+// final words, or answering something they said. Rival-vs-rival talk uses templates.
+function worthModel(g, sp) {
+  if (sp.target === HUMAN_ID || sp.evidence?.length || sp.final) return true;
+  if (sp.intent === 'deny') return (g.statements[sp.day] || []).some((s) => s.speaker === HUMAN_ID && s.intent === 'accuse' && s.target === sp.speaker);
+  return false;
+}
+
 const INTENT_KO = { accuse: '의심', defend: '감싸기', pass: '관망', deny: '부인', claim: '예언 공개', skip: '말 안 함' };
 
 // Live preview of how the typed sentence will be counted; click to override.
@@ -409,9 +417,9 @@ async function processEvents(events) {
       const batch = [];
       while (i < events.length && events[i].t === 'statement' && events[i].speaker !== HUMAN_ID) batch.push(events[i++]);
       i--;
-      const specs = batch.map((e) => ({ speaker: e.speaker, intent: e.intent, target: e.target, result: e.result, evidence: e.evidence, day: e.day }));
+      const specs = batch.map((e) => ({ speaker: e.speaker, intent: e.intent, target: e.target, result: e.result, evidence: e.evidence, day: e.day, final: e.final }));
       pushFeed({ kind: 'system', text: `${batch.map((b) => displayName(b.speaker)).join(', ')} 생각 중…` });
-      const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`, { mode: 'single', chat: todayChat(g) });
+      const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`, { mode: 'single', chat: todayChat(g), useModel: (sp) => worthModel(g, sp) });
       for (let k = 0; k < batch.length; k++) {
         setLineText(g, batch[k], lines[k].text);
         pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length, final: batch[k].final });
@@ -467,8 +475,10 @@ async function finishGame() {
   S.lastReport = { report, record, roles: Object.fromEntries(g.players.map((p) => [p.id, p.role])), remarks: null };
   renderReport();
   const mine = S.lastReport;
-  const remarks = await renderLines(`${g.n}판 종료 후, 라이벌들이 플레이어에게 한마디씩 한다`, remarkSpecs(report), 'remarks');
+  // End-of-game remarks are templates built from the same evidence (no plan usage).
+  const remarks = await renderLines(`${g.n}판 종료`, remarkSpecs(report), 'remarks', { useModel: () => false });
   mine.remarks = remarks;
+  if (S.gm) mine.cost = { ai: S.gm.ai, calls: S.gm.calls, inputTokens: S.gm.inputTokens, outputTokens: S.gm.outputTokens };
   if (S.gm) {
     const s = S.gm.samples.filter((x) => x.totalMs != null);
     bridge?.metricsAppend({
@@ -539,6 +549,7 @@ function renderReport() {
     <div class="tally big"><span class="read">읽힘 ${t.caught}</span><span class="bluff">속임 ${t.bluffs}</span><span class="muted">이번 판 기억이 바꾼 투표 ${flips.length}표</span></div>
     ${flips.length ? '' : `<p class="muted">이번 판에는 기억 때문에 바뀐 투표가 없었습니다.</p>`}
     <div class="rivals">${rivals}</div>
+    ${S.lastReport.cost?.ai ? `<p class="muted small">이번 판 ChatGPT 플랜 사용: AI 호출 ${S.lastReport.cost.calls}회 · 입력 ${S.lastReport.cost.inputTokens.toLocaleString()} / 출력 ${S.lastReport.cost.outputTokens.toLocaleString()} 토큰</p>` : ''}
     <p class="muted small">이 노트는 당신의 클릭(발언 종류, 투표 타이밍과 대상, 밤 선택)만으로 계산되며 이 컴퓨터에만 저장됩니다.</p>
     <div class="row">${S.lastReport.multi ? `<button class="primary big" data-act="mBack">방으로 돌아가기</button>` : `<button class="primary big" data-act="newGame">${nextGameNumber(S.profile)}판째 시작</button>`}<button class="ghost" data-act="title">타이틀</button></div>
   </section>`;
