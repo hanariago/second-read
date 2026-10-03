@@ -14,14 +14,17 @@
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "dist": "electron-builder --mac --win",
-    "selfcheck": "SECOND_READ_SELFCHECK=${TMPDIR:-/tmp}/second-read-selfcheck electron ."
+    "selfcheck": "SECOND_READ_SELFCHECK=${TMPDIR:-/tmp}/second-read-selfcheck electron .",
+    "relay": "cd server && wrangler dev --port 8787 --ip 127.0.0.1",
+    "test:multi": "node test/multi.e2e.mjs"
   },
   "dependencies": {
     "jose": "^6.2.0"
   },
   "devDependencies": {
     "electron": "^44.5.1",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "wrangler": "^4.147.0"
   },
   "build": {
     "appId": "io.github.hanariago.secondread",
