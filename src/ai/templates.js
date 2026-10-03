@@ -11,9 +11,9 @@ const hasBatchim = (word) => {
 const JOSA = { 는: ['은', '는'], 가: ['이', '가'], 를: ['을', '를'], 랑: ['이랑', '랑'], 와: ['과', '와'] };
 
 // Fills {t} with a name and fixes the particle after it (레온은 / 미오는).
-export function withName(str, id) {
-  const human = id === HUMAN_ID;
-  const nm = id ? displayName(id) : '';
+export function withName(str, id, nameOf = displayName) {
+  const human = id === HUMAN_ID && nameOf === displayName;
+  const nm = id ? nameOf(id) : '';
   return str
     .replace(/\{t\}\s*(씨|님)(는|가|를|랑|와)?/g, (_, h, j) =>
       human ? '당신' + (j ? JOSA[j][0] : '') : `${nm} ${h}${j ?? ''}`,
@@ -36,6 +36,7 @@ const V = {
     clear: ['{ev}. 시민일 때의 당신과 같은 패턴이군요.'],
     asideSuspect: ['{ev}. ...메모해 두죠.'],
     asideClear: ['{ev}. 이번엔 시민 쪽 숫자네요.'],
+    deny: ['저는 아닙니다. 계산해 보시면 압니다.'],
   },
   mio: {
     accuse: ['솔직히 {t} 좀 수상해! 감이 그래.', '나 {t} 찍을래. 느낌이 쎄해!'],
@@ -47,6 +48,7 @@ const V = {
     clear: ['{ev}. 시민일 때 너랑 똑같네~ 패스!'],
     asideSuspect: ['어?! {ev}. 나 봤다~'],
     asideClear: ['{ev}. 오늘은 순한 쪽이네?'],
+    deny: ['나 아니거든! 억울해!'],
   },
   bruno: {
     accuse: ['흠. {t}, 내 경험상 냄새가 나.', '{t}. 눈 피하지 마. 수상해.'],
@@ -58,6 +60,7 @@ const V = {
     clear: ['{ev}. 시민일 때 하던 대로군. 넘어가지.'],
     asideSuspect: ['{ev}. 흠, 또 그러는군.'],
     asideClear: ['{ev}. 오늘은 다르게 나오는군.'],
+    deny: ['헛다리 짚지 마. 난 아냐.'],
   },
   sera: {
     accuse: ['{t} 님, 그 수는 읽혔어요.', '{t} 님 쪽 진형이 어딘가 어색하네요.'],
@@ -69,8 +72,32 @@ const V = {
     clear: ['{ev}. 시민일 때의 수순 그대로네요.'],
     asideSuspect: ['{ev}. 체크.'],
     asideClear: ['{ev}. 흥미로운 수네요.'],
+    deny: ['저를 잡는 건 악수예요. 저는 아니에요.'],
   },
 };
+
+// Multiplayer: rivals must read like people in a group chat, so the fallback
+// lines are short, casual and identical in tone for every seat.
+const CASUAL = {
+  accuse: ['{t} 좀 수상함', '난 {t} 의심됨', '{t} 아까부터 이상한데', '솔직히 {t} 같음', '{t} 쪽 냄새남'],
+  defend: ['{t}는 아닌듯', '{t}는 믿어봄', '{t} 말고 딴사람 같은데', '{t}는 시민 같음'],
+  pass: ['음 아직 모르겠음', '좀 더 보자', '다들 말 좀 해봐', '흠..', '일단 패스'],
+  deny: ['나 아님 ㄹㅇ', '왜 나야 ㅋㅋ', '나 시민임', '억울하네'],
+  claimMafia: ['나 예언자임 {t} 마피아 나옴', '조사했는데 {t} 마피아임'],
+  claimTown: ['나 예언자임 {t} 시민 나옴', '조사했는데 {t}는 시민'],
+  memory: ['{ev}', '{ev} ㅋㅋ'],
+  clear: ['{ev}'],
+  remarkEmpty: ['ㄱㄱ 한판 더', '다음 판에 봄', '재밌었음'],
+};
+
+function casualLine(spec, s, nameOf) {
+  const fill = (str) => withName(str, spec.target, nameOf).replaceAll('{ev}', evidenceSentence(spec.evidence || []));
+  if (spec.intent === 'remark') return spec.evidence?.length ? fill(pick(CASUAL.memory, s)) : pick(CASUAL.remarkEmpty, s);
+  if (spec.intent === 'claim') return fill(pick(spec.result === 'mafia' ? CASUAL.claimMafia : CASUAL.claimTown, s));
+  const base = fill(pick(CASUAL[spec.intent] || CASUAL.pass, s));
+  if (spec.evidence?.length) return `${base} ${fill(pick(spec.intent === 'defend' ? CASUAL.clear : CASUAL.memory, s))}`;
+  return base;
+}
 
 const REMARK_EMPTY = {
   leon: '아직 표본이 부족합니다. 다음 판에 다시 계산하죠.',
@@ -101,11 +128,14 @@ function evidenceSentence(evidence) {
 }
 
 // spec: {speaker, intent, target, result?, evidence[], kind?}
-export function templateLine(spec, seed = 0) {
+// opts.nameOf maps seat ids to display names; opts.casual selects group-chat tone.
+export function templateLine(spec, seed = 0, opts = {}) {
+  const nameOf = opts.nameOf ?? displayName;
+  const s = seed + hash(spec.speaker + (spec.target || '') + spec.intent);
+  if (opts.casual) return casualLine(spec, s, nameOf);
   const v = V[spec.speaker];
   if (!v) return '';
-  const s = seed + hash(spec.speaker + (spec.target || '') + spec.intent);
-  const fill = (str) => withName(str, spec.target).replaceAll('{ev}', evidenceSentence(spec.evidence || []));
+  const fill = (str) => withName(str, spec.target, nameOf).replaceAll('{ev}', evidenceSentence(spec.evidence || []));
   if (spec.t === 'aside') return fill(pick(spec.kind === 'suspect' ? v.asideSuspect : v.asideClear, s));
   if (spec.intent === 'remark') {
     const ev = (spec.evidence || []).slice(0, 2);
@@ -122,6 +152,8 @@ export function templateLine(spec, seed = 0) {
 }
 
 export function humanLine(st) {
+  if (st.text) return st.text;
+  if (st.intent === 'deny') return '난 아니야.';
   if (st.intent === 'accuse') return withName('{t}, 수상해.', st.target);
   if (st.intent === 'defend') return withName('{t}는 믿어도 될 것 같아.', st.target);
   if (st.intent === 'claim') return withName(`내가 예언자야. {t}는 ${st.result === 'mafia' ? '마피아' : '시민'}로 나왔어.`, st.target);

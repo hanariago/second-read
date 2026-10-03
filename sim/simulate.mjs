@@ -20,7 +20,7 @@ const POLICIES = {
 
 function playGame(policy, n, past, memory, seed) {
   const rng = createRng(seed ^ 0x9e3779b9);
-  const g = createGame({ n, pastGames: past, memory, seed });
+  const g = createGame({ n, pastGames: past, memory, seed, rounds: +(process.env.ROUNDS || 2) });
   const mafia = g.humanRole === 'mafia';
   let pol = policy;
   if (policy.switchAt && n >= policy.switchAt && mafia) {

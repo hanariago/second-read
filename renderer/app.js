@@ -1,11 +1,12 @@
 // Game UI. All input is clicks; the engine decides, dialogue only renders.
-import { createGame, act, gameRecord, publicView, ROLE_KO } from '../src/core/engine.js';
+import { createGame, act, gameRecord, publicView, setLineText, ROLE_KO } from '../src/core/engine.js';
+import { parseIntent } from '../src/core/intent.js';
 import { CHARACTERS, HUMAN_ID, charById, displayName } from '../src/core/characters.js';
 import { nextGameNumber, addGame, rivalReport, remarkSpecs, tallies, emptyProfile } from '../src/core/profile.js';
 import { createDialogue } from '../src/ai/dialogue.js';
 import { createBridgeTransport } from '../src/ai/bridgeTransport.js';
 import { templateLine, humanLine, withName } from '../src/ai/templates.js';
-import { sceneSummary } from '../src/ai/prompts.js';
+import { sceneSummary, todayChat } from '../src/ai/prompts.js';
 import { createBridgeStore, createLocalStorageStore } from '../src/store/tellStore.js';
 
 const bridge = window.secondRead ?? null;
@@ -49,12 +50,12 @@ function dialogue() {
   return createDialogue({ transport: S.aiOn && bridge ? createBridgeTransport(bridge) : null, onMetric });
 }
 
-async function renderLines(scene, specs, label) {
+async function renderLines(scene, specs, label, ctx = {}) {
   try {
-    return await dialogue().render(scene, specs, label);
+    return await dialogue().render(scene, specs, label, ctx);
   } catch (err) {
     handleFatal(err);
-    return createDialogue({ transport: null }).render(scene, specs, label);
+    return createDialogue({ transport: null }).render(scene, specs, label, ctx);
   }
 }
 
@@ -268,6 +269,29 @@ function refreshSeats() {
   if (ph && S.game) ph.textContent = `${S.game.day}일차 ${{ statement: '낮 · 발언', vote: '낮 · 투표', night: '밤', over: '종료' }[S.game.phase]}`;
 }
 
+const INTENT_KO = { accuse: '의심', defend: '감싸기', pass: '관망', deny: '부인', claim: '예언 공개', skip: '말 안 함' };
+
+// Live preview of how the typed sentence will be counted; click to override.
+function updateIntentChips() {
+  const row = $('#intentRow');
+  const input = $('#say');
+  if (!row || !input || !S.game?.pending) return;
+  const p = S.game.pending;
+  const names = Object.fromEntries(p.targets.map((t) => [t, displayName(t)]));
+  const auto = parseIntent(input.value, names);
+  const chosen = S.intentOverride ?? auto;
+  const label = (x) => (x.target ? `${displayName(x.target)} ${INTENT_KO[x.intent]}${x.intent === 'claim' ? `(${x.result === 'mafia' ? '마피아' : '시민'})` : ''}` : INTENT_KO[x.intent]);
+  const alts = [
+    ...p.targets.flatMap((t) => [{ intent: 'accuse', target: t }, { intent: 'defend', target: t }]),
+    { intent: 'pass', target: null },
+    { intent: 'deny', target: null },
+  ];
+  row.innerHTML = `<span class="muted small">이렇게 집계됩니다:</span> <span class="chip-intent on">${esc(label(chosen))}</span>
+    <details><summary class="muted small">바꾸기</summary>${alts.map((a, i) => `<button class="chip-intent" data-act="intentPick" data-i="${i}">${esc(label(a))}</button>`).join('')}</details>`;
+  S.intentAlts = alts;
+  S.intentChosen = chosen.intent === 'skip' ? { intent: 'pass', target: null } : chosen;
+}
+
 function targetButtons(targets, act, extra = '') {
   return targets.map((t) => `<button class="target" data-act="${act}" data-target="${t}" ${extra}><img src="${portrait(t)}" alt="" />${esc(displayName(t))}</button>`).join('');
 }
@@ -287,12 +311,22 @@ function renderActions() {
     return;
   }
   if (p.type === 'statement') {
-    el.innerHTML = `
-      <div class="act-title">당신의 한 마디</div>
+    const textMode = S.profile.settings.inputMode === 'text';
+    const head = `<div class="act-title">당신의 한 마디 <span class="muted">${p.round}/${p.rounds} 라운드</span>
+      <span class="mode-switch"><button class="${textMode ? '' : 'on'}" data-act="inputMode" data-mode="buttons">빠른 버튼</button><button class="${textMode ? 'on' : ''}" data-act="inputMode" data-mode="text">직접 입력</button></span></div>`;
+    if (textMode) {
+      el.innerHTML = `${head}
+        <div class="composer"><input id="say" maxlength="80" placeholder="예: 레온 좀 수상한데? / 미오는 시민 같아" autocomplete="off" /><button class="primary" data-act="sayText">말하기</button></div>
+        <div class="intent-row" id="intentRow"></div>`;
+      updateIntentChips();
+      $('#say').focus();
+    } else {
+      el.innerHTML = `${head}
       <div class="act-row"><span class="act-label">의심한다</span>${targetButtons(p.targets, 'say-accuse')}</div>
       <div class="act-row"><span class="act-label">감싼다</span>${targetButtons(p.targets, 'say-defend')}</div>
       ${p.claims.length ? `<div class="act-row"><span class="act-label">조사 결과 공개</span>${p.claims.map((c) => `<button class="target claim" data-act="say-claim" data-target="${c.target}">${esc(withName(`{t}는 ${c.result === 'mafia' ? '마피아' : '시민'}`, c.target))}</button>`).join('')}</div>` : ''}
-      <div class="act-row"><button class="ghost" data-act="say-pass">관망한다</button></div>`;
+      <div class="act-row"><button class="ghost" data-act="say-pass">관망한다</button>${p.accusedBy.length ? `<button class="ghost" data-act="say-deny">나는 아니라고 한다</button>` : ''}</div>`;
+    }
   } else if (p.type === 'vote') {
     const total = S.game.voteOrder[S.game.day].length;
     el.innerHTML = `
@@ -330,15 +364,18 @@ async function processEvents(events) {
   for (let i = 0; i < events.length; i++) {
     const ev = events[i];
     if (ev.t === 'statement' && ev.speaker === HUMAN_ID) {
-      pushFeed({ kind: 'line', speaker: HUMAN_ID, text: humanLine(ev) });
+      const text = humanLine(ev);
+      setLineText(g, ev, text);
+      pushFeed({ kind: 'line', speaker: HUMAN_ID, text });
     } else if (ev.t === 'statement') {
       const batch = [];
       while (i < events.length && events[i].t === 'statement' && events[i].speaker !== HUMAN_ID) batch.push(events[i++]);
       i--;
       const specs = batch.map((e) => ({ speaker: e.speaker, intent: e.intent, target: e.target, result: e.result, evidence: e.evidence, day: e.day }));
       pushFeed({ kind: 'system', text: `${batch.map((b) => displayName(b.speaker)).join(', ')} 생각 중…` });
-      const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`);
+      const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`, { mode: 'single', chat: todayChat(g) });
       for (let k = 0; k < batch.length; k++) {
+        setLineText(g, batch[k], lines[k].text);
         pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length });
         await sleep(450);
       }
@@ -361,7 +398,8 @@ async function processEvents(events) {
       refreshSeats();
       if (ev.phase === 'vote') pushFeed({ kind: 'system', text: `${ev.day}일차 투표. 처형할 사람을 고르세요.` });
       if (ev.phase === 'night') pushFeed({ kind: 'system', text: `${ev.day}일차 밤.` });
-      if (ev.phase === 'statement' && ev.day > 1) pushFeed({ kind: 'system', text: `${ev.day}일차 낮. 마지막 날입니다.` });
+      if (ev.phase === 'statement' && ev.day > 1 && ev.round === 1) pushFeed({ kind: 'system', text: `${ev.day}일차 낮.` });
+      if (ev.phase === 'statement' && ev.round > 1) pushFeed({ kind: 'system', text: `${ev.round}라운드 — 방금 말에 반응할 차례.` });
     } else if (ev.t === 'over') {
       pushFeed({ kind: 'system', text: ev.winner === 'town' ? '시민 승리' : '마피아 승리' });
     }
@@ -550,6 +588,22 @@ document.addEventListener('click', async (e) => {
       return doAct({ intent: 'claim', target: t });
     case 'say-pass':
       return doAct({ intent: 'pass' });
+    case 'say-deny':
+      return doAct({ intent: 'deny' });
+    case 'inputMode':
+      S.profile = { ...S.profile, settings: { ...S.profile.settings, inputMode: b.dataset.mode } };
+      await store.save(S.profile);
+      return renderActions();
+    case 'intentPick':
+      S.intentOverride = S.intentAlts[+b.dataset.i];
+      return updateIntentChips();
+    case 'sayText': {
+      const text = $('#say')?.value.trim();
+      if (!text) return;
+      const c = S.intentChosen;
+      S.intentOverride = null;
+      return doAct({ intent: c.intent, target: c.target, result: c.result, text });
+    }
     case 'vote':
       return doAct({ type: 'vote', target: t });
     case 'night':
@@ -577,6 +631,16 @@ document.addEventListener('click', async (e) => {
     case 'exportMetrics':
       return bridge?.metricsExport();
   }
+});
+
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'say') {
+    S.intentOverride = null;
+    updateIntentChips();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.target.id === 'say' && e.key === 'Enter' && !e.isComposing) $('[data-act="sayText"]')?.click();
 });
 
 document.addEventListener('change', async (e) => {

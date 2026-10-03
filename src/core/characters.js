@@ -16,8 +16,8 @@ export const CHARACTERS = [
       grudge: 0.2, // how much being accused by someone raises suspicion of them
       trustSeer: 0.9,
     },
-    watches: ['vote_first'],
-    watchLabel: '투표 타이밍',
+    watches: ['vote_first', 'round_skip'],
+    watchLabel: '타이밍과 침묵',
     color: '#5b8def',
   },
   {
@@ -48,8 +48,8 @@ export const CHARACTERS = [
       grudge: 0.3,
       trustSeer: 0.6,
     },
-    watches: ['vote_follow'],
-    watchLabel: '대세 편승',
+    watches: ['vote_follow', 'vote_own_accused'],
+    watchLabel: '대세 편승과 말·표 일치',
     color: '#c7903a',
   },
   {

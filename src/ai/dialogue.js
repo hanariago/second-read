@@ -26,18 +26,21 @@ export function createDialogue({ transport = null, timeoutMs = 10000, onMetric =
   }
 
   // specs: [{speaker, intent, target, result?, evidence[], day}]
-  async function render(scene, specs, label = 'lines') {
+  // ctx: { mode, nameOf, chat, style, allowNumbers } (see prompts.js / validate.js)
+  async function render(scene, specs, label = 'lines', ctx = {}) {
     if (!specs.length) return [];
+    const casual = ctx.mode === 'multi';
+    const allowNumbers = [...(ctx.allowNumbers || []), ...(ctx.chat || []).flatMap((c) => (c.says.match(/\d+/g) || []).map(Number))];
     let parsed = null;
-    if (transport) parsed = await callModel(buildLinesRequest(scene, specs), label);
+    if (transport) parsed = await callModel(buildLinesRequest(scene, specs, ctx), label);
     const got = Array.isArray(parsed?.lines) ? parsed.lines : [];
     let rejected = 0;
     const out = specs.map((spec, i) => {
       const line = got.find((l) => l?.speaker_id === spec.speaker);
-      const why = parsed ? checkLine(spec, line) : 'no-model';
+      const why = parsed ? checkLine(spec, line, { nameOf: ctx.nameOf, allowNumbers }) : 'no-model';
       if (why) {
         if (parsed) rejected++;
-        return { speaker: spec.speaker, text: templateLine(spec, i), source: 'template', reason: why };
+        return { speaker: spec.speaker, text: templateLine(spec, i, { nameOf: ctx.nameOf, casual }), source: 'template', reason: why };
       }
       return { speaker: spec.speaker, text: line.text.trim(), source: 'ai', evidenceIds: line.evidence_ids };
     });

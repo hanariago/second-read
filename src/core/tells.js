@@ -38,6 +38,20 @@ export const FEATURES = {
     nowYes: '오늘도 보복 투표',
     nowNo: '오늘은 보복 없이',
   },
+  vote_own_accused: {
+    label: '내가 의심한 사람에게 투표',
+    yes: '그날 자신이 의심한 사람에게 투표했다',
+    no: '그날 자신이 의심한 사람이 아닌 쪽에 투표했다',
+    nowYes: '오늘도 말한 대로 투표',
+    nowNo: '오늘은 말과 다르게 투표',
+  },
+  round_skip: {
+    label: '토론 라운드 건너뛰기',
+    yes: '토론 라운드에서 말없이 넘어갔다',
+    no: '토론 라운드에서 말을 했다',
+    nowYes: '오늘도 말없이 넘김',
+    nowNo: '오늘은 입을 열었고',
+  },
   victim_accuser: {
     label: '나를 의심한 사람이 밤에 제거됨',
     yes: '밤 희생자가 낮에 당신을 의심했던 사람이었다',

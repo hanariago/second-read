@@ -32,7 +32,17 @@ app.whenReady().then(async () => {
       await wait(250);
       if (await has('.report')) break;
       const mafia = await has('.my-role.mafia');
-      if (await has('[data-act="say-accuse"]')) {
+      if (await has('#say')) {
+        const line = mafia ? '미오 좀 수상한데? 아까부터 말이 없음' : '음 난 아직 잘 모르겠어';
+        await js(`(() => { const i = document.querySelector('#say'); i.value = ${JSON.stringify('')} + ${JSON.stringify('')}; i.value = ${JSON.stringify(line)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+        await wait(200);
+        await shot(`g${gnum}-${String(step).padStart(2, '0')}-typing`);
+        await click('[data-act="sayText"]');
+        await wait(2600);
+        await shot(`g${gnum}-${String(step).padStart(2, '0')}-statements`);
+      } else if (gnum === 2 && (await has('[data-act="inputMode"][data-mode="text"]'))) {
+        await click('[data-act="inputMode"][data-mode="text"]');
+      } else if (await has('[data-act="say-accuse"]')) {
         await click(mafia ? '[data-act="say-accuse"]' : '[data-act="say-pass"]');
         await wait(2600);
         await shot(`g${gnum}-${String(step).padStart(2, '0')}-statements`);
