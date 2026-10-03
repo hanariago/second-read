@@ -123,6 +123,8 @@ export class Room extends DurableObject {
     if (msg.t === 'start') return this.startGame(pid, msg);
     if (!this.g || this.g.phase === 'over' || !c.seat) return;
     if (msg.t === 'say' && this.g.phase === 'statement') {
+      // Ignore a late message meant for a round that already closed.
+      if (msg.day !== undefined && (msg.day !== this.g.day || msg.round !== this.g.round)) return;
       submit(this.g, c.seat, { intent: msg.intent, target: msg.target, result: msg.result, text: clean(msg.text, 80) || null });
       this.send(pid, { t: 'ack', phase: 'statement' });
       this.progress();
@@ -143,7 +145,10 @@ export class Room extends DurableObject {
     const c = this.clients.get(pid);
     this.clients.delete(pid);
     if (!c) return;
-    if (this.host === pid) this.host = [...this.clients.entries()].find(([, x]) => x.joined)?.[0] ?? null;
+    if (this.host === pid) {
+      this.host = [...this.clients.entries()].find(([, x]) => x.joined)?.[0] ?? null;
+      if (this.host) this.send(this.host, { t: 'welcome', host: true });
+    }
     if (this.g && this.g.phase !== 'over') {
       // Hand that player's rivals to someone else; pending lines fall back to templates.
       for (const [ai, owner] of Object.entries(this.owners)) if (owner === pid) this.owners[ai] = this.pickOwner();
@@ -185,6 +190,7 @@ export class Room extends DurableObject {
     this.owners = {};
     CHARACTERS.forEach((ch, i) => (this.owners[ch.id] = renderers.length ? renderers[i % renderers.length] : null));
     this.humanTexts = [];
+    this.lineStats = { total: 0, fallback: 0 };
     const seats = shuffle(ids).map((id) => ({ id, nick: this.nick[id] }));
     for (const [p, c] of players) {
       const me = this.g.players.find((x) => x.id === c.seat);
@@ -200,7 +206,7 @@ export class Room extends DurableObject {
   openStatement() {
     const g = this.g;
     const plan = openRound(g);
-    this.round = { day: g.day, round: g.round, lines: {}, waiting: new Set(), humansDoneAt: null, closed: false };
+    this.round = { day: g.day, round: g.round, lines: {}, waiting: new Set(), fromTemplate: new Set(), humansDoneAt: null, closed: false };
     const nameOf = this.nameOf;
     const scene = sceneSummary(g, nameOf);
     const chat = todayChat(g, nameOf);
@@ -217,6 +223,7 @@ export class Room extends DurableObject {
         this.round.waiting.add(s.speaker);
       } else {
         this.round.lines[s.speaker] = this.freshTemplate(spec);
+        this.round.fromTemplate.add(s.speaker);
       }
       this.round.specs = { ...(this.round.specs || {}), [s.speaker]: spec };
     }
@@ -286,7 +293,11 @@ export class Room extends DurableObject {
     r.closed = true;
     clearTimeout(this.timer);
     for (const ai of Object.keys(r.specs || {})) {
-      if (!r.lines[ai]) r.lines[ai] = this.freshTemplate(r.specs[ai]);
+      this.lineStats.total += 1;
+      if (!r.lines[ai] || r.waiting.has(ai) || r.fromTemplate.has(ai)) {
+        if (!r.lines[ai]) r.lines[ai] = this.freshTemplate(r.specs[ai]);
+        this.lineStats.fallback += 1;
+      }
     }
     const events = close(g);
     const messages = [];
@@ -361,7 +372,7 @@ export class Room extends DurableObject {
       if (!c.joined || !c.seat) continue;
       // Each player receives only their own record, to store on their own device.
       const record = { ...gameRecord(g, c.seat), memory: c.memory };
-      this.send(pid, { t: 'over', winner: g.winner, reveal, record, humanTexts: texts });
+      this.send(pid, { t: 'over', winner: g.winner, reveal, record, humanTexts: texts, lineStats: this.lineStats });
       c.seat = null;
       c.n += 1;
       c.records = [...c.records, record].slice(-40);

@@ -47,8 +47,26 @@ function onMetric(m) {
   bridge?.metricsAppend({ ...m, game: S.game?.n ?? null });
 }
 
+// Dev only: localStorage['second-read.devFakeAI'] = '1' answers with canned lines,
+// so the multiplayer render path can be tested without a ChatGPT login.
+function devFakeTransport() {
+  try {
+    if (localStorage.getItem('second-read.devFakeAI') !== '1') return null;
+  } catch {
+    return null;
+  }
+  return {
+    async complete({ input }) {
+      const { speakers } = JSON.parse(input[0].content);
+      const lines = speakers.map((s) => ({ speaker_id: s.speaker_id, text: s.target ? `${s.target} 쪽이 좀 걸림 (fake)` : '음 일단 봄 (fake)', evidence_ids: s.evidence.slice(0, 1).map((e) => e.id) }));
+      return { text: JSON.stringify({ lines }), usage: { input_tokens: 0, output_tokens: 0 }, ttftMs: 0, totalMs: 0, model: 'fake' };
+    },
+  };
+}
+
 function dialogue() {
-  return createDialogue({ transport: S.aiOn && bridge ? createBridgeTransport(bridge) : null, onMetric });
+  const transport = devFakeTransport() ?? (S.aiOn && bridge ? createBridgeTransport(bridge) : null);
+  return createDialogue({ transport, onMetric });
 }
 
 async function renderLines(scene, specs, label, ctx = {}) {
@@ -101,7 +119,7 @@ function closeModal() {
 
 async function refreshAuth() {
   S.auth = bridge ? await bridge.authStatus() : { signedIn: false, planEnabled: false };
-  S.aiOn = !!(S.auth.signedIn && S.auth.planEnabled);
+  S.aiOn = !!(S.auth.signedIn && S.auth.planEnabled) || !!devFakeTransport();
   updateBadges();
 }
 

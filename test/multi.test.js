@@ -78,3 +78,31 @@ test('validator allows in-game talk but not cross-game memory without evidence',
   assert.equal(checkLine(spec, { text: '6명 중에 누구지', evidence_ids: [] }, { allowNumbers: [6] }), null);
   assert.equal(checkLine(spec, { text: '지난 판에도 그랬잖아', evidence_ids: [] }), 'memory-without-evidence');
 });
+
+test('multi render path: model lines with nicknames pass, cross-game memory falls back to casual template', async () => {
+  const { createDialogue } = await import('../src/ai/dialogue.js');
+  // Same shape the relay sends in a `render` message.
+  const names = { h1: '곰돌이', leon: '새벽세시', mio: '두부' };
+  const specs = [
+    { speaker: 'leon', intent: 'accuse', target: 'h1', day: 1, evidence: [{ id: 'leon-d1r1-e1-now', f: 'stance_accuse', kind: 'now', text: '이번 판 1일차엔 첫 발언에서 누군가를 의심했다', short: '오늘도 첫 마디부터 의심' }] },
+    { speaker: 'mio', intent: 'pass', target: null, day: 1, evidence: [] },
+  ];
+  const transport = {
+    complete: async () => ({
+      text: JSON.stringify({
+        lines: [
+          { speaker_id: 'mio', text: '지난 판에도 이랬잖아', evidence_ids: [] },
+          { speaker_id: 'leon', text: '곰돌이 오늘 첫마디부터 몰아가던데', evidence_ids: ['leon-d1r1-e1-now'] },
+        ],
+      }),
+      usage: {},
+    }),
+  };
+  const d = createDialogue({ transport });
+  const lines = await d.render('1일차 낮', specs, 'multi', { mode: 'multi', nameOf: (id) => names[id] ?? id, chat: [{ who: '곰돌이', says: '두부 수상함' }], style: null });
+  assert.deepEqual(lines.map((l) => l.speaker), ['leon', 'mio']);
+  assert.equal(lines[0].source, 'ai');
+  assert.equal(lines[1].source, 'template');
+  assert.equal(lines[1].reason, 'memory-without-evidence');
+  assert.ok(!/입니다|습니다/.test(lines[1].text), 'fallback stays casual in multi');
+});

@@ -116,7 +116,11 @@ export function setupMulti(ctx) {
   // ---------- messages ----------
 
   async function onMessage(m) {
-    if (m.t === 'welcome') M.host = m.host;
+    if (m.t === 'welcome') {
+      M.host = m.host;
+      if (M.phase === 'over') renderOver();
+      else if (!M.phase || M.phase === 'lobby') renderLobby();
+    }
     else if (m.t === 'lobby') {
       M.players = m.players;
       M.host = M.players.some((p) => p.host) && M.host;
@@ -203,6 +207,8 @@ export function setupMulti(ctx) {
 
   function openPhase(phase, m) {
     M.phase = phase;
+    M.day = m.day;
+    M.round = m.round;
     M.options = m.options;
     M.deadline = m.deadline;
     M.submitted = false;
@@ -281,7 +287,7 @@ export function setupMulti(ctx) {
     const rounds = m.record.obs.filter((o) => o.f === 'round_skip').length;
     S.profile = { ...S.profile, style: learnStyle(S.profile.style ?? emptyStyle(), m.humanTexts, { skipped, rounds }) };
     await store.save(S.profile);
-    bridge?.metricsAppend({ label: 'multi-game', durationMs: Date.now() - M.startedAt, humans: m.reveal.filter((r) => r.human).length });
+    bridge?.metricsAppend({ label: 'multi-game', durationMs: Date.now() - M.startedAt, humans: m.reveal.filter((r) => r.human).length, rivalLines: m.lineStats?.total, fallbackLines: m.lineStats?.fallback });
     M.last = m;
     renderOver();
   }
@@ -327,10 +333,10 @@ export function setupMulti(ctx) {
         const text = $('#mSay')?.value.trim();
         if (!text) return;
         const c = M.chosen;
-        return send({ t: 'say', text, intent: c.intent, target: c.target, result: c.result });
+        return send({ t: 'say', text, intent: c.intent, target: c.target, result: c.result, day: M.day, round: M.round });
       }
       case 'mSkip':
-        return send({ t: 'say', intent: 'skip' });
+        return send({ t: 'say', intent: 'skip', day: M.day, round: M.round });
       case 'mVote':
         return send({ t: 'vote', target: b.dataset.target });
       case 'mNight':

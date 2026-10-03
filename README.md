@@ -40,7 +40,7 @@
 ```bash
 npm run relay                      # 로컬 서버 (http://127.0.0.1:8787)
 npm start                          # 앱 1
-npm run start:p2                   # 같은 컴퓨터에서 앱 2 (별도 데이터 폴더)
+npm run start:p2                   # 같은 컴퓨터에서 앱 2 (별도 데이터 폴더, macOS/Linux 셸 문법)
 npm run test:multi                 # 가짜 클라이언트로 전체 판 자동 검증
 cd server && npx wrangler deploy   # 실제 배포 (Cloudflare 로그인 필요)
 ```

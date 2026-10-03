@@ -32,6 +32,10 @@ app.whenReady().then(async () => {
     const A = await mk('p1');
     const B = await mk('p2');
     const js = (w, code) => w.webContents.executeJavaScript(code);
+    // Window A plays as a signed-in player with a canned model, so it writes rival lines.
+    await js(A, `localStorage.setItem('second-read.devFakeAI', '1')`);
+    await A.webContents.reload();
+    await wait(800);
     const has = (w, sel) => js(w, `!!document.querySelector(${JSON.stringify(sel)})`);
     const click = (w, sel) => js(w, `(() => { const b = document.querySelector(${JSON.stringify(sel)}); if (b) { b.click(); return true; } return false; })()`);
     const setVal = (w, sel, v) => js(w, `(() => { const i = document.querySelector(${JSON.stringify(sel)}); if (!i) return; i.value = ${JSON.stringify(v)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
@@ -77,7 +81,10 @@ app.whenReady().then(async () => {
         } else if (await has(w, '[data-act="mNight"]')) await click(w, '[data-act="mNight"]');
       }
       if (step === 5) await shot(A, 'm5-play');
-      if (step === 9) await shot(B, 'm6-play-b');
+      if (step === 9) {
+        await shot(B, 'm6-play-b');
+        console.log('fake-AI lines seen by B so far:', await js(B, `(document.querySelector('#feed')?.innerText.match(/\\(fake\\)/g) || []).length`));
+      }
     }
     await wait(500);
     await shot(A, 'm7-over');
