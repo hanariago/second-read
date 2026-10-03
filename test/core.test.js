@@ -21,7 +21,9 @@ function play(n, past, memory, seed) {
     else if (p.type === 'vote') {
       if (!mafia && p.canWait && p.votes.length < 2) act(g, { type: 'wait' });
       else act(g, { type: 'vote', target: rng.pick(p.targets) });
-    } else if (p.type === 'night') act(g, p.action === 'sleep' ? {} : { target: rng.pick(p.targets) });
+    } else if (p.type === 'defense') act(g, { intent: 'deny' });
+    else if (p.type === 'verdict') act(g, { yes: rng.next() < 0.6 });
+    else if (p.type === 'night') act(g, p.action === 'sleep' ? {} : { target: rng.pick(p.targets) });
   }
   return g;
 }
@@ -37,14 +39,40 @@ function playMany(count, memory, seed = 1) {
   return { past, games };
 }
 
-test('every game ends within two days', () => {
+test('every game ends; sparing someone at the trial adds at most a few days', () => {
+  const days = [];
   for (let s = 1; s < 60; s++) {
     const { games } = playMany(3, true, s);
     for (const g of games) {
       assert.equal(g.phase, 'over');
-      assert.ok(g.day <= 2);
+      assert.ok(g.day <= 5);
+      days.push(g.day);
     }
   }
+  const avg = days.reduce((a, b) => a + b, 0) / days.length;
+  assert.ok(avg < 3, `average days ${avg}`);
+});
+
+test('trial: the most-voted player speaks last, then a majority must agree to execute', () => {
+  let executed = 0;
+  let spared = 0;
+  for (let s = 1; s < 120; s++) {
+    const g = play(2, [], true, s);
+    for (const e of g.events) {
+      if (e.t === 'execute') {
+        assert.ok(e.yes > e.no);
+        executed++;
+      }
+      if (e.t === 'spared') {
+        assert.ok(e.yes <= e.no);
+        spared++;
+      }
+    }
+    const trials = g.events.filter((e) => e.t === 'trial').length;
+    const finals = g.events.filter((e) => e.t === 'statement' && e.final).length;
+    assert.equal(finals, trials);
+  }
+  assert.ok(executed > 0 && spared > 0, `executed ${executed} spared ${spared}`);
 });
 
 test('first games alternate roles so both are observed by game 3', () => {

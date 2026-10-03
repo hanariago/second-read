@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = 8799;
 const BASE = `http://127.0.0.1:${PORT}`;
-const TIMERS = { round: 4000, grace: 700, vote: 3000, night: 2000, nightIdle: 150 };
+const TIMERS = { round: 4000, grace: 700, vote: 3000, defense: 3000, verdict: 2500, night: 2000, nightIdle: 150 };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const failures = [];
 const check = (ok, msg) => {
@@ -81,6 +81,16 @@ function makeClient(code, name, behavior) {
       if (m.options.type !== 'vote') return;
       await wait(100 + Math.random() * 300);
       send({ t: 'vote', target: m.options.targets[Math.floor(Math.random() * m.options.targets.length)] });
+    } else if (m.t === 'defense_open') {
+      if (m.options.type !== 'defense') return;
+      await wait(100);
+      send({ t: 'say', intent: 'deny', text: `${name} 최후 변론` });
+    } else if (m.t === 'verdict_open') {
+      if (m.options.type !== 'verdict') return;
+      await wait(80);
+      send({ t: 'verdict', yes: Math.random() < 0.6 });
+    } else if (m.t === 'defense') {
+      c.defenses = (c.defenses || 0) + 1;
     } else if (m.t === 'night_open') {
       if (m.options.type !== 'night' || m.options.action === 'sleep') return;
       await wait(100);
@@ -143,6 +153,7 @@ try {
     const reveal = live[0].over.reveal;
     check(reveal.filter((r) => r.human).length === 3 && reveal.length === 7, '3p: final reveal shows 3 humans among 7 seats');
     check(live[0].over.humanTexts.length > 0, '3p: human lines are sent back for style learning');
+    check(live.every((c) => (c.defenses || 0) > 0), '3p: every vote goes to final words before the verdict');
     void seats;
   }
 

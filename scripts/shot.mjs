@@ -51,6 +51,14 @@ app.whenReady().then(async () => {
         await click('[data-act="vote"]');
         await wait(2600);
         await shot(`g${gnum}-${String(step).padStart(2, '0')}-vote`);
+      } else if (await has('[data-act="verdict-yes"]')) {
+        await shot(`g${gnum}-${String(step).padStart(2, '0')}-verdict`);
+        await click('[data-act="verdict-yes"]');
+        await wait(1500);
+      } else if (await has('[data-act="say-deny"]')) {
+        await shot(`g${gnum}-${String(step).padStart(2, '0')}-defense`);
+        await click('[data-act="say-deny"]');
+        await wait(1500);
       } else if (await has('[data-act="night"]')) await click('[data-act="night"]');
       else if (await has('[data-act="sleep"]')) await click('[data-act="sleep"]');
       else if (await has('[data-act="spectate"]')) await click('[data-act="spectate"]');

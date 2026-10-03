@@ -76,6 +76,9 @@ app.whenReady().then(async () => {
             await click(w, '[data-act="mSend"]');
           }
           if (k === 'B') n++;
+        } else if (await has(w, '[data-act="mVerdictYes"]')) {
+          if (k === 'A') await shot(A, `m5-verdict-${step}`);
+          await click(w, '[data-act="mVerdictYes"]');
         } else if (await has(w, '[data-act="mVote"]')) {
           await click(w, '[data-act="mVote"]');
         } else if (await has(w, '[data-act="mNight"]')) await click(w, '[data-act="mNight"]');

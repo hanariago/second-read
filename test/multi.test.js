@@ -16,6 +16,8 @@ function playMatch(nHumans, seed, memory = true, past = {}) {
     for (const h of waitingOn(g)) {
       const o = humanOptions(g, h);
       if (o.type === 'statement') submit(g, h, rng.next() < 0.3 ? { intent: 'skip' } : { intent: 'accuse', target: rng.pick(o.targets), text: 'x' });
+      else if (o.type === 'defense') submit(g, h, { intent: 'deny', text: '나 아님' });
+      else if (o.type === 'verdict') submit(g, h, { yes: rng.next() < 0.5 });
       else if (o.targets?.length) submit(g, h, { target: rng.pick(o.targets) });
     }
     close(g);

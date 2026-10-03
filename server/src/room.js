@@ -9,7 +9,7 @@ import { templateLine, humanLine } from '../../src/ai/templates.js';
 import { sceneSummary, todayChat } from '../../src/ai/prompts.js';
 
 const NICKS = ['고등어', '새벽세시', '감자칩', '민트초코', '레몬즙', '곰돌이', '택배왔어요', '슬리퍼', '구름빵', '호박죽', '두부', '라면왕', '달팽이', '소금빵', '오리발', '펭귄', '귤껍질', '양말한짝'];
-const DEFAULT_TIMERS = { round: 75000, grace: 8000, vote: 30000, night: 25000, nightIdle: 1500 };
+const DEFAULT_TIMERS = { round: 75000, grace: 8000, vote: 30000, defense: 40000, verdict: 20000, night: 25000, nightIdle: 1500 };
 const MAX_HUMANS = 4;
 const MAX_MSG = 64 * 1024;
 
@@ -122,7 +122,15 @@ export class Room extends DurableObject {
     }
     if (msg.t === 'start') return this.startGame(pid, msg);
     if (!this.g || this.g.phase === 'over' || !c.seat) return;
-    if (msg.t === 'say' && this.g.phase === 'statement') {
+    if (msg.t === 'say' && this.g.phase === 'defense') {
+      submit(this.g, c.seat, { intent: msg.intent, target: msg.target, result: msg.result, text: clean(msg.text, 80) || null });
+      this.send(pid, { t: 'ack', phase: 'defense' });
+      this.progress();
+    } else if (msg.t === 'verdict' && this.g.phase === 'verdict') {
+      submit(this.g, c.seat, { yes: !!msg.yes });
+      this.send(pid, { t: 'ack', phase: 'verdict' });
+      this.progress();
+    } else if (msg.t === 'say' && this.g.phase === 'statement') {
       // Ignore a late message meant for a round that already closed.
       if (msg.day !== undefined && (msg.day !== this.g.day || msg.round !== this.g.round)) return;
       submit(this.g, c.seat, { intent: msg.intent, target: msg.target, result: msg.result, text: clean(msg.text, 80) || null });
@@ -281,6 +289,17 @@ export class Room extends DurableObject {
       }
     } else if (g.phase === 'vote') {
       if (!humansLeft.length) this.finishVote();
+    } else if (g.phase === 'defense') {
+      const r = this.round;
+      if (!r || r.closed || humansLeft.length) return;
+      for (const ai of [...r.waiting]) if (!this.clients.has(this.owners[ai])) r.waiting.delete(ai);
+      if (!r.waiting.size) return this.finishDefense();
+      if (!r.humansDoneAt) {
+        r.humansDoneAt = Date.now();
+        this.setTimer(this.T.grace, () => this.finishDefense());
+      }
+    } else if (g.phase === 'verdict') {
+      if (!humansLeft.length) this.finishVerdict();
     } else if (g.phase === 'night') {
       if (!humansLeft.length) this.setTimer(this.T.nightIdle, () => this.finishNight());
     }
@@ -330,8 +349,86 @@ export class Room extends DurableObject {
     clearTimeout(this.timer);
     const events = close(g);
     const votes = events.filter((e) => e.t === 'vote').map((e) => ({ voter: e.voter, target: e.target }));
+    const trial = events.find((e) => e.t === 'trial');
+    this.broadcast({ t: 'vote_result', day: g.day, votes, trial: trial ? { seat: trial.target, count: trial.counts[trial.target], tie: trial.tie } : null });
+    this.openDefense();
+  }
+
+  // The most-voted player gets final words before the execute/spare vote.
+  openDefense() {
+    const g = this.g;
+    const target = g.trial.target;
+    const deadline = Date.now() + this.T.defense;
+    this.round = { kind: 'defense', day: g.day, round: g.rounds + 1, lines: {}, waiting: new Set(), fromTemplate: new Set(), specs: {}, humansDoneAt: null, closed: false };
+    if (g.defensePlan) {
+      const s = g.defensePlan;
+      const spec = { speaker: s.speaker, intent: s.intent, target: s.target, result: s.result, day: s.day, evidence: [] };
+      this.round.specs[s.speaker] = spec;
+      const owner = this.owners[s.speaker];
+      if (owner && this.clients.has(owner)) {
+        this.round.waiting.add(s.speaker);
+        const names = Object.fromEntries(g.players.map((p) => [p.id, this.nameOf(p.id)]));
+        this.send(owner, { t: 'render', reqId: `${g.day}-final`, scene: `${sceneSummary(g, this.nameOf)} / 최후 변론`, chat: todayChat(g, this.nameOf), specs: [spec], names });
+      } else {
+        this.round.lines[s.speaker] = this.freshTemplate(spec);
+        this.round.fromTemplate.add(s.speaker);
+      }
+    }
+    for (const [p, c] of this.clients) {
+      if (!c.joined || !c.seat) continue;
+      this.send(p, { t: 'defense_open', day: g.day, target, deadline, options: this.phaseOptions(c.seat) });
+    }
+    this.setTimer(g.defensePlan ? this.T.grace : this.T.defense, () => this.finishDefense());
+    this.progress();
+  }
+
+  finishDefense() {
+    const g = this.g;
+    const r = this.round;
+    if (!g || !r || r.closed || g.phase !== 'defense') return;
+    r.closed = true;
+    clearTimeout(this.timer);
+    for (const ai of Object.keys(r.specs)) {
+      this.lineStats.total += 1;
+      if (!r.lines[ai] || r.waiting.has(ai) || r.fromTemplate.has(ai)) {
+        if (!r.lines[ai]) r.lines[ai] = this.freshTemplate(r.specs[ai]);
+        this.lineStats.fallback += 1;
+      }
+    }
+    const events = close(g);
+    const st = events.find((e) => e.t === 'statement' && e.final);
+    let text = '';
+    if (st) {
+      const human = st.speaker.startsWith('h');
+      text = human ? st.text || (st.intent === 'pass' ? '' : humanLine(st)) : r.lines[st.speaker];
+      if (text) setLineText(g, st, text);
+      if (human && st.text) this.humanTexts.push(st.text);
+    }
+    this.broadcast({ t: 'defense', seat: g.trial.target, text });
+    this.openVerdict();
+  }
+
+  openVerdict() {
+    const g = this.g;
+    const deadline = Date.now() + this.T.verdict;
+    for (const [p, c] of this.clients) {
+      if (!c.joined || !c.seat) continue;
+      this.send(p, { t: 'verdict_open', day: g.day, target: g.trial.target, deadline, options: this.phaseOptions(c.seat) });
+    }
+    this.setTimer(this.T.verdict, () => this.finishVerdict());
+    this.progress();
+  }
+
+  finishVerdict() {
+    const g = this.g;
+    if (!g || g.phase !== 'verdict') return;
+    clearTimeout(this.timer);
+    const target = g.trial.target;
+    const events = close(g);
+    const verdicts = events.filter((e) => e.t === 'verdict').map((e) => ({ voter: e.voter, yes: e.yes }));
     const ex = events.find((e) => e.t === 'execute');
-    this.broadcast({ t: 'vote_result', day: ex?.day, votes, executed: ex ? { seat: ex.target, role: ex.role, tie: ex.tie } : null });
+    const sp = events.find((e) => e.t === 'spared');
+    this.broadcast({ t: 'verdict_result', day: g.day, target, verdicts, yes: (ex || sp).yes, no: (ex || sp).no, executed: ex ? { seat: ex.target, role: ex.role } : null });
     if (g.phase === 'over') return this.finishGame();
     this.openNight();
   }

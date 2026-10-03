@@ -50,7 +50,9 @@ function playGame(policy, n, past, memory, seed) {
       const accusers = (g.statements[g.day] || []).filter((s) => s.intent === 'accuse' && s.target === HUMAN_ID).map((s) => s.speaker).filter((s) => p.targets.includes(s));
       const target = known?.target ?? (accusers.length && rng.next() < 0.5 ? rng.pick(accusers) : rng.pick(p.targets));
       act(g, { type: 'vote', target });
-    } else if (p.type === 'night') {
+    } else if (p.type === 'defense') act(g, { intent: 'deny' });
+    else if (p.type === 'verdict') act(g, { yes: g.trial.target !== HUMAN_ID && rng.next() < 0.7 });
+    else if (p.type === 'night') {
       if (p.action === 'sleep') act(g, {});
       else if (p.action === 'kill') {
         const acc = (g.statements[g.day] || []).filter((s) => s.intent === 'accuse' && s.target === HUMAN_ID).map((s) => s.speaker).filter((s) => p.targets.includes(s));

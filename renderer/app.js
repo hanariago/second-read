@@ -243,7 +243,7 @@ function feedItemHtml(it) {
     : '';
   return `<div class="line ${it.speaker === HUMAN_ID ? 'me' : ''} ${it.memory ? 'memory' : ''}">
     <img src="${portrait(it.speaker)}" alt="" />
-    <div class="bubble"><div class="who" style="color:${c?.color ?? '#d9a441'}">${esc(displayName(it.speaker))}${it.memory ? '<span class="tag">기억</span>' : ''}</div>
+    <div class="bubble"><div class="who" style="color:${c?.color ?? '#d9a441'}">${esc(displayName(it.speaker))}${it.final ? '<span class="tag final">최후 변론</span>' : ''}${it.memory ? '<span class="tag">기억</span>' : ''}</div>
     <div class="text">${esc(it.text)}</div>${ev}</div></div>`;
 }
 
@@ -285,7 +285,7 @@ function refreshSeats() {
   const el = $('#seats');
   if (el) el.innerHTML = seatsHtml();
   const ph = $('#phaseLabel');
-  if (ph && S.game) ph.textContent = `${S.game.day}일차 ${{ statement: '낮 · 발언', vote: '낮 · 투표', night: '밤', over: '종료' }[S.game.phase]}`;
+  if (ph && S.game) ph.textContent = `${S.game.day}일차 ${{ statement: '낮 · 발언', vote: '낮 · 투표', defense: '낮 · 최후 변론', verdict: '낮 · 찬반 투표', night: '밤', over: '종료' }[S.game.phase]}`;
 }
 
 const INTENT_KO = { accuse: '의심', defend: '감싸기', pass: '관망', deny: '부인', claim: '예언 공개', skip: '말 안 함' };
@@ -297,14 +297,14 @@ function updateIntentChips() {
   if (!row || !input || !S.game?.pending) return;
   const p = S.game.pending;
   const names = Object.fromEntries(p.targets.map((t) => [t, displayName(t)]));
-  const auto = parseIntent(input.value, names);
+  let auto = parseIntent(input.value, names);
+  const defense = p.type === 'defense';
+  if (defense && !['deny', 'accuse', 'claim', 'pass'].includes(auto.intent)) auto = { intent: auto.intent === 'skip' ? 'pass' : 'deny', target: null };
   const chosen = S.intentOverride ?? auto;
   const label = (x) => (x.target ? `${displayName(x.target)} ${INTENT_KO[x.intent]}${x.intent === 'claim' ? `(${x.result === 'mafia' ? '마피아' : '시민'})` : ''}` : INTENT_KO[x.intent]);
-  const alts = [
-    ...p.targets.flatMap((t) => [{ intent: 'accuse', target: t }, { intent: 'defend', target: t }]),
-    { intent: 'pass', target: null },
-    { intent: 'deny', target: null },
-  ];
+  const alts = defense
+    ? [{ intent: 'deny', target: null }, ...p.targets.map((t) => ({ intent: 'accuse', target: t })), { intent: 'pass', target: null }]
+    : [...p.targets.flatMap((t) => [{ intent: 'accuse', target: t }, { intent: 'defend', target: t }]), { intent: 'pass', target: null }, { intent: 'deny', target: null }];
   row.innerHTML = `<span class="muted small">이렇게 집계됩니다:</span> <span class="chip-intent on">${esc(label(chosen))}</span>
     <details><summary class="muted small">바꾸기</summary>${alts.map((a, i) => `<button class="chip-intent" data-act="intentPick" data-i="${i}">${esc(label(a))}</button>`).join('')}</details>`;
   S.intentAlts = alts;
@@ -353,6 +353,24 @@ function renderActions() {
       <div class="act-title">처형 투표 <span class="muted">투표 진행 ${p.votes.length}/${total + 1} · 언제 투표할지도 당신의 선택</span></div>
       <div class="act-row">${targetButtons(p.targets, 'vote')}</div>`;
     if (p.canWait) S.voteTimer = setTimeout(() => doAct({ type: 'wait' }), p.votes.length === 0 ? 3200 : 1700);
+  } else if (p.type === 'defense') {
+    const textMode = S.profile.settings.inputMode === 'text';
+    const head = `<div class="act-title">최후 변론 <span class="muted">당신이 최다 득표(${p.counts[HUMAN_ID]}표). 이 한마디 뒤에 찬반 투표가 열립니다.</span></div>`;
+    if (textMode) {
+      el.innerHTML = `${head}
+        <div class="composer"><input id="say" maxlength="80" placeholder="예: 나 아니야, 진짜 마피아는 미오야" autocomplete="off" /><button class="primary" data-act="sayText">변론하기</button></div>
+        <div class="intent-row" id="intentRow"></div>`;
+      updateIntentChips();
+      $('#say').focus();
+    } else {
+      el.innerHTML = `${head}
+        <div class="act-row"><button class="primary" data-act="say-deny">나는 아니다</button><button class="ghost" data-act="say-pass">말없이 받아들인다</button></div>
+        <div class="act-row"><span class="act-label">진짜 마피아는</span>${targetButtons(p.targets, 'say-accuse')}</div>
+        ${p.claims.length ? `<div class="act-row"><span class="act-label">조사 결과 공개</span>${p.claims.map((c) => `<button class="target claim" data-act="say-claim" data-target="${c.target}">${esc(withName(`{t}는 ${c.result === 'mafia' ? '마피아' : '시민'}`, c.target))}</button>`).join('')}</div>` : ''}`;
+    }
+  } else if (p.type === 'verdict') {
+    el.innerHTML = `<div class="act-title">${esc(displayName(p.target))}의 처형 <span class="muted">최후 변론을 듣고 결정하세요. 찬성이 과반이어야 처형됩니다.</span></div>
+      <div class="act-row"><button class="primary" data-act="verdict-yes">처형 찬성</button><button class="ghost" data-act="verdict-no">반대 (살린다)</button></div>`;
   } else if (p.type === 'night') {
     if (p.action === 'kill') el.innerHTML = `<div class="act-title">밤 · 제거할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else if (p.action === 'check') el.innerHTML = `<div class="act-title">밤 · 정체를 조사할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
@@ -386,7 +404,7 @@ async function processEvents(events) {
     if (ev.t === 'statement' && ev.speaker === HUMAN_ID) {
       const text = humanLine(ev);
       setLineText(g, ev, text);
-      pushFeed({ kind: 'line', speaker: HUMAN_ID, text });
+      pushFeed({ kind: 'line', speaker: HUMAN_ID, text, final: ev.final });
     } else if (ev.t === 'statement') {
       const batch = [];
       while (i < events.length && events[i].t === 'statement' && events[i].speaker !== HUMAN_ID) batch.push(events[i++]);
@@ -396,7 +414,7 @@ async function processEvents(events) {
       const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`, { mode: 'single', chat: todayChat(g) });
       for (let k = 0; k < batch.length; k++) {
         setLineText(g, batch[k], lines[k].text);
-        pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length });
+        pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length, final: batch[k].final });
         await sleep(450);
       }
     } else if (ev.t === 'aside') {
@@ -409,7 +427,21 @@ async function processEvents(events) {
     } else if (ev.t === 'execute') {
       refreshSeats();
       await sleep(400);
-      pushFeed({ kind: 'system', text: `${ev.tie ? '동표 — 제비뽑기로 ' : ''}${displayName(ev.target)} 처형. 정체: ${ROLE_KO[ev.role]}` });
+      pushFeed({ kind: 'system', text: `찬성 ${ev.yes} : 반대 ${ev.no} — ${displayName(ev.target)} 처형. 정체: ${ROLE_KO[ev.role]}` });
+    } else if (ev.t === 'trial') {
+      refreshSeats();
+      pushFeed({ kind: 'system', text: `${ev.tie ? '동표 — 제비뽑기로 ' : ''}${displayName(ev.target)} 최다 득표(${ev.counts[ev.target]}표). 처형 전에 최후 변론.` });
+      await sleep(500);
+    } else if (ev.t === 'verdict') {
+      const batch = [];
+      while (i < events.length && events[i].t === 'verdict') batch.push(events[i++]);
+      i--;
+      const yes = batch.filter((v) => v.yes).map((v) => displayName(v.voter));
+      const no = batch.filter((v) => !v.yes).map((v) => displayName(v.voter));
+      pushFeed({ kind: 'system', text: `처형 찬성: ${yes.join(', ') || '없음'} / 반대: ${no.join(', ') || '없음'}` });
+      await sleep(500);
+    } else if (ev.t === 'spared') {
+      pushFeed({ kind: 'system', text: `찬성 ${ev.yes} : 반대 ${ev.no} — ${withName('{t}는', ev.target)} 살아남았습니다.` });
     } else if (ev.t === 'night') {
       pushFeed({ kind: 'system', text: `밤사이 ${displayName(ev.victim)}${ev.victim === HUMAN_ID ? '이' : '가'} 쓰러졌습니다. 정체: ${ROLE_KO[ev.role]}` });
     } else if (ev.t === 'seerResult') {
@@ -487,7 +519,7 @@ function renderReport() {
             </div></div>`;
         })
         .join('');
-      const rf = r.flips.map((f) => `<div class="flip ${f.kind}"><b>${FLIP_LABEL[f.kind][0]}</b> ${f.day}일차 투표 — ${esc(FLIP_LABEL[f.kind][1])}</div>`).join('');
+      const rf = r.flips.map((f) => `<div class="flip ${f.kind}"><b>${FLIP_LABEL[f.kind][0]}</b> ${f.day}일차 ${f.verdict ? '최후 판결' : '투표'} — ${esc(FLIP_LABEL[f.kind][1])}</div>`).join('');
       return `<div class="rival">
         <div class="rival-head"><img src="${portrait(r.id)}" alt="" /><div><div class="rival-name">${esc(r.name)} ${roles[r.id] ? `<span class="role-tag ${roles[r.id]}">${ROLE_KO[roles[r.id]]}</span>` : ''}</div><div class="muted">지켜보는 것: ${esc(r.watchLabel)}</div></div></div>
         ${rows}${rf}
@@ -621,6 +653,10 @@ document.addEventListener('click', async (e) => {
       return doAct({ intent: 'pass' });
     case 'say-deny':
       return doAct({ intent: 'deny' });
+    case 'verdict-yes':
+      return doAct({ yes: true });
+    case 'verdict-no':
+      return doAct({ yes: false });
     case 'inputMode':
       S.profile = { ...S.profile, settings: { ...S.profile.settings, inputMode: b.dataset.mode } };
       await store.save(S.profile);

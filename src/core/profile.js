@@ -68,7 +68,9 @@ export function remarkSpecs(report) {
       evidence.push({
         id: `${r.id}-f${i}`,
         kind: 'flip',
-        text: `이번 판 ${f.day}일차 투표: 기억이 없었다면 ${nm(f.withoutTell)}, 실제로는 ${nm(f.withTell)}에게 투표`,
+        text: f.verdict
+          ? `이번 판 ${f.day}일차 최후 판결: 기억이 없었다면 ${f.withoutTell ? '찬성' : '반대'}, 실제로는 ${f.withTell ? '찬성' : '반대'}`
+          : `이번 판 ${f.day}일차 투표: 기억이 없었다면 ${nm(f.withoutTell)}, 실제로는 ${nm(f.withTell)}에게 투표`,
       });
     });
     return { speaker: r.id, intent: 'remark', target: null, evidence };

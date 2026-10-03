@@ -134,6 +134,19 @@ export function setupMulti(ctx) {
     else if (m.t === 'round_open') openPhase('statement', m);
     else if (m.t === 'vote_open') openPhase('vote', m);
     else if (m.t === 'night_open') openPhase('night', m);
+    else if (m.t === 'defense_open') openPhase('defense', m);
+    else if (m.t === 'verdict_open') openPhase('verdict', m);
+    else if (m.t === 'defense') pushFeed({ kind: 'chat', seat: m.seat, text: m.text || '(말없이 받아들임)', final: true });
+    else if (m.t === 'verdict_result') {
+      const yes = m.verdicts.filter((v) => v.yes).map((v) => nameOf(v.voter));
+      const no = m.verdicts.filter((v) => !v.yes).map((v) => nameOf(v.voter));
+      pushFeed({ kind: 'sys', text: `처형 찬성: ${yes.join(', ') || '없음'} / 반대: ${no.join(', ') || '없음'}` });
+      if (m.executed) {
+        M.alive[m.executed.seat] = false;
+        pushFeed({ kind: 'sys', text: `찬성 ${m.yes} : 반대 ${m.no} — ${nameOf(m.executed.seat)} 처형. 정체: ${ROLE_KO[m.executed.role]}` });
+      } else pushFeed({ kind: 'sys', text: `찬성 ${m.yes} : 반대 ${m.no} — ${nameOf(m.target)} 살아남음.` });
+      renderSeats();
+    }
     else if (m.t === 'ack') {
       M.submitted = true;
       renderActions();
@@ -142,6 +155,7 @@ export function setupMulti(ctx) {
       if (!m.messages.length) pushFeed({ kind: 'sys', text: '아무도 말하지 않았다.' });
     } else if (m.t === 'vote_result') {
       pushFeed({ kind: 'sys', text: m.votes.map((v) => `${nameOf(v.voter)}→${nameOf(v.target)}`).join('  ') });
+      if (m.trial) pushFeed({ kind: 'sys', text: `${m.trial.tie ? '동표, 제비뽑기로 ' : ''}${nameOf(m.trial.seat)} 최다 득표(${m.trial.count}표). 최후 변론.` });
       if (m.executed) {
         M.alive[m.executed.seat] = false;
         pushFeed({ kind: 'sys', text: `${m.executed.tie ? '동표, 제비뽑기로 ' : ''}${nameOf(m.executed.seat)} 처형. 정체: ${ROLE_KO[m.executed.role]}` });
@@ -199,7 +213,7 @@ export function setupMulti(ctx) {
     const el = $('#feed');
     if (!el) return;
     let html;
-    if (it.kind === 'chat') html = `<div class="chat"><b style="color:${M.color[it.seat]}">${esc(nameOf(it.seat))}</b> ${esc(it.text)}</div>`;
+    if (it.kind === 'chat') html = `<div class="chat ${it.final ? 'final' : ''}"><b style="color:${M.color[it.seat]}">${esc(nameOf(it.seat))}</b>${it.final ? '<span class="tag final">최후 변론</span>' : ''} ${esc(it.text)}</div>`;
     else html = `<div class="sys ${it.kind === 'private' ? 'private' : ''}">${esc(it.text)}</div>`;
     el.insertAdjacentHTML('beforeend', html);
     el.scrollTop = el.scrollHeight;
@@ -213,7 +227,7 @@ export function setupMulti(ctx) {
     M.deadline = m.deadline;
     M.submitted = false;
     M.override = null;
-    const label = phase === 'statement' ? `${m.day}일차 낮 · ${m.round}/${m.rounds} 라운드` : phase === 'vote' ? `${m.day}일차 투표` : `${m.day}일차 밤`;
+    const label = { statement: `${m.day}일차 낮 · ${m.round}/${m.rounds} 라운드`, vote: `${m.day}일차 투표`, defense: `${m.day}일차 최후 변론`, verdict: `${m.day}일차 찬반 투표`, night: `${m.day}일차 밤` }[phase];
     const pl = $('#phaseLabel');
     if (pl) pl.textContent = label;
     if (phase === 'vote') pushFeed({ kind: 'sys', text: `${m.day}일차 투표. 다 같이 공개됩니다.` });
@@ -242,7 +256,18 @@ export function setupMulti(ctx) {
       el.innerHTML = `<div class="act-title muted">제출했어요. 다른 사람들을 기다리는 중…</div>`;
       return;
     }
-    if (o.type === 'statement') {
+    if (o.type === 'wait') {
+      el.innerHTML = `<div class="act-title muted">${M.phase === 'defense' ? `${esc(nameOf(o.target))}의 최후 변론을 기다리는 중…` : '다른 사람들이 처형 여부를 정하는 중…'}</div>`;
+    } else if (o.type === 'defense') {
+      el.innerHTML = `<div class="act-title">최후 변론 <span class="muted small">내가 최다 득표. 이 한마디 뒤에 찬반 투표</span></div>
+        <div class="composer"><input id="mSay" maxlength="80" placeholder="예: 나 아님, 진짜 마피아는 저 사람" autocomplete="off" /><button class="primary" data-act="mSend">변론</button><button class="ghost" data-act="mSkip">말없이</button></div>
+        <div class="intent-row" id="mIntent"></div>`;
+      updateChips();
+      $('#mSay').focus();
+    } else if (o.type === 'verdict') {
+      el.innerHTML = `<div class="act-title">${esc(nameOf(o.target))} 처형할까요? <span class="muted small">찬성이 과반이어야 처형</span></div>
+        <div class="act-row"><button class="primary" data-act="mVerdictYes">처형 찬성</button><button class="ghost" data-act="mVerdictNo">반대 (살린다)</button></div>`;
+    } else if (o.type === 'statement') {
       el.innerHTML = `<div class="act-title">메시지 <span class="muted small">80자, 다 같이 공개됩니다</span></div>
         <div class="composer"><input id="mSay" maxlength="80" placeholder="예: ${esc(nameOf(o.targets[0]))} 좀 수상한데" autocomplete="off" /><button class="primary" data-act="mSend">보내기</button><button class="ghost" data-act="mSkip">스킵</button></div>
         <div class="intent-row" id="mIntent"></div>`;
@@ -259,12 +284,17 @@ export function setupMulti(ctx) {
   function updateChips() {
     const row = $('#mIntent');
     const input = $('#mSay');
-    if (!row || !input || M.options?.type !== 'statement') return;
+    const defense = M.options?.type === 'defense';
+    if (!row || !input || (M.options?.type !== 'statement' && !defense)) return;
     const names = Object.fromEntries(M.options.targets.map((t) => [t, nameOf(t)]));
-    const auto = parseIntent(input.value, names);
-    const chosen = M.override ?? (auto.intent === 'skip' ? { intent: 'pass', target: null } : auto);
+    let auto = parseIntent(input.value, names);
+    if (auto.intent === 'skip') auto = { intent: defense ? 'deny' : 'pass', target: null };
+    if (defense && !['deny', 'accuse', 'claim', 'pass'].includes(auto.intent)) auto = { intent: 'deny', target: null };
+    const chosen = M.override ?? auto;
     const label = (x) => (x.target ? `${nameOf(x.target)} ${INTENT_KO[x.intent]}` : INTENT_KO[x.intent]);
-    const alts = [...M.options.targets.flatMap((t) => [{ intent: 'accuse', target: t }, { intent: 'defend', target: t }]), { intent: 'pass', target: null }, { intent: 'deny', target: null }];
+    const alts = defense
+      ? [{ intent: 'deny', target: null }, ...M.options.targets.map((t) => ({ intent: 'accuse', target: t })), { intent: 'pass', target: null }]
+      : [...M.options.targets.flatMap((t) => [{ intent: 'accuse', target: t }, { intent: 'defend', target: t }]), { intent: 'pass', target: null }, { intent: 'deny', target: null }];
     M.alts = alts;
     M.chosen = chosen;
     row.innerHTML = `<span class="muted small">이렇게 집계:</span> <span class="chip-intent on">${esc(label(chosen))}</span>
@@ -337,6 +367,10 @@ export function setupMulti(ctx) {
       }
       case 'mSkip':
         return send({ t: 'say', intent: 'skip', day: M.day, round: M.round });
+      case 'mVerdictYes':
+        return send({ t: 'verdict', yes: true });
+      case 'mVerdictNo':
+        return send({ t: 'verdict', yes: false });
       case 'mVote':
         return send({ t: 'vote', target: b.dataset.target });
       case 'mNight':

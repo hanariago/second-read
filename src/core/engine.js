@@ -276,6 +276,11 @@ function setPending(g) {
   } else if (g.phase === 'vote') {
     const remaining = g.voteOrder[g.day].filter((id) => !g.votes[g.day].some((v) => v.voter === id));
     g.pending = { type: 'vote', targets: others, canWait: remaining.length > 0, votes: g.votes[g.day].slice() };
+  } else if (g.phase === 'defense') {
+    const checks = g.seerChecks.filter((x) => x.seer === me && isAlive(g, x.target));
+    g.pending = { type: 'defense', targets: others, counts: g.trial.counts, claims: g.humanRole === 'seer' ? checks.map((x) => ({ target: x.target, result: x.result })) : [] };
+  } else if (g.phase === 'verdict') {
+    g.pending = { type: 'verdict', target: g.trial.target, counts: g.trial.counts };
   } else if (g.phase === 'night') {
     g.pending = nightAction(g, me);
   }
@@ -387,11 +392,11 @@ function recordHumanStatementObs(g, h, st) {
   if (g.mode !== 'single') g.obs[h].push({ f: 'round_skip', v: st.intent === 'skip', day: st.day });
 }
 
-function validateHumanStatement(g, h, action) {
+function validateHumanStatement(g, h, action, round = g.round) {
   const intent = action.intent;
   const others = aliveIds(g).filter((id) => id !== h);
   if (!['accuse', 'defend', 'pass', 'claim', 'deny', 'skip'].includes(intent)) throw new Error('invalid intent');
-  const st = { speaker: h, day: g.day, round: g.round, intent, target: null, evidence: [] };
+  const st = { speaker: h, day: g.day, round, intent, target: null, evidence: [] };
   if (action.text) st.text = String(action.text).slice(0, 120);
   if (intent === 'accuse' || intent === 'defend' || intent === 'claim') {
     if (!others.includes(action.target)) throw new Error('invalid target');
@@ -508,20 +513,97 @@ function maybeAsides(g, h) {
   }
 }
 
-function finishVote(g) {
+// The most-voted player doesn't die yet: they get final words, then everyone
+// else votes to execute or spare (a strict majority of "yes" executes).
+function enterTrial(g) {
   const d = g.day;
   const counts = tally(g.votes[d]);
   const max = Math.max(...Object.values(counts));
   const top = Object.keys(counts).filter((k) => counts[k] === max);
   const target = top.length > 1 ? g.rng.pick(top) : top[0];
-  const p = player(g, target);
-  p.alive = false;
-  g.deaths.push({ id: target, day: d, how: 'vote', role: p.role });
-  emit(g, { t: 'execute', target, role: p.role, tie: top.length > 1, counts, day: d });
-  if (checkWin(g)) return;
+  g.trial = { day: d, target, counts, tie: top.length > 1, verdicts: [] };
+  g.phase = 'defense';
+  g.submitted = {};
+  emit(g, { t: 'trial', target, counts, tie: top.length > 1, day: d });
+  g.defensePlan = isHuman(g, target) ? null : decideDefense(g, target);
+}
+
+function decideDefense(g, cid) {
+  const me = player(g, cid);
+  let st = { speaker: cid, day: g.day, round: g.rounds + 1, final: true, intent: 'deny', target: null, evidence: [] };
+  const myCheck = g.seerChecks.filter((x) => x.seer === cid && isAlive(g, x.target)).pop();
+  if (me.role === 'seer' && myCheck) return { ...st, intent: 'claim', target: myCheck.target, result: myCheck.result };
+  if (g.rng.next() < 0.5) {
+    // Point at someone else on the way out.
+    let target;
+    if (me.role === 'mafia') target = Object.entries(frameScores(g, cid)).sort((a, b) => b[1] - a[1])[0]?.[0];
+    else target = aliveIds(g).filter((t) => t !== cid).map((t) => ({ t, s: suspicion(g, cid, t).total })).sort((a, b) => b.s - a.s)[0]?.t;
+    if (target) st = { ...st, intent: 'accuse', target };
+  }
+  return st;
+}
+
+function recordDefense(g, st) {
+  recordStatement(g, st);
+  const h = st.speaker;
+  if (isHuman(g, h) && accusersBefore(g, h, st.day, st.round).length) g.obs[h].push({ f: 'deny_when_accused', v: st.intent === 'deny', day: st.day });
+  g.defensePlan = null;
+  g.phase = 'verdict';
+  g.submitted = {};
+  emit(g, { t: 'phase', phase: 'verdict', day: g.day });
+}
+
+function aiVerdict(g, cid) {
+  const { target, day } = g.trial;
+  const me = player(g, cid);
+  let yes;
+  let yesNoTell;
+  if (me.role === 'mafia') {
+    yes = player(g, target).role === 'mafia' ? g.rng.next() < 0.25 : true;
+    yesNoTell = yes;
+  } else {
+    const noise = g.rng.gumbel() * charById[cid].personality.temperature * 0.5;
+    const scores = aliveIds(g)
+      .filter((t) => t !== cid)
+      .map((t) => ({ t, ...suspicion(g, cid, t) }));
+    const accused = scores.find((x) => x.t === target);
+    const others = scores.filter((x) => x.t !== target);
+    const bestOther = Math.max(-9, ...others.map((x) => x.total));
+    const bestOtherNo = Math.max(-9, ...others.map((x) => x.base));
+    yes = accused.total + noise > bestOther - 0.2;
+    yesNoTell = accused.base + noise > bestOtherNo - 0.2;
+  }
+  g.trial.verdicts.push({ voter: cid, yes });
+  emit(g, { t: 'verdict', voter: cid, yes, day });
+  if (yes !== yesNoTell && isHuman(g, target)) {
+    const humanMafia = player(g, target).role === 'mafia';
+    const kind = yes ? (humanMafia ? 'read' : 'misread') : humanMafia ? 'deceived' : 'cleared';
+    g.flips.push({ voter: cid, day, human: target, verdict: true, withTell: yes, withoutTell: yesNoTell, kind });
+  }
+}
+
+function resolveVerdict(g) {
+  const { target, day, verdicts, counts, tie } = g.trial;
+  const yes = verdicts.filter((v) => v.yes).length;
+  const no = verdicts.length - yes;
+  if (yes > no) {
+    const p = player(g, target);
+    p.alive = false;
+    g.deaths.push({ id: target, day, how: 'vote', role: p.role });
+    emit(g, { t: 'execute', target, role: p.role, tie, counts, yes, no, day });
+    if (checkWin(g)) return;
+  } else {
+    emit(g, { t: 'spared', target, yes, no, day });
+  }
   g.phase = 'night';
   g.nightPicks = {};
-  emit(g, { t: 'phase', phase: 'night', day: d });
+  emit(g, { t: 'phase', phase: 'night', day });
+}
+
+// Rivals (and, in single mode, nobody else) deliver verdicts, then resolve.
+function finishVerdictsWithAI(g) {
+  for (const id of aliveIds(g)) if (!isHuman(g, id) && id !== g.trial.target) aiVerdict(g, id);
+  resolveVerdict(g);
 }
 
 function checkWin(g) {
@@ -632,14 +714,37 @@ export function act(g, action) {
       emit(g, { t: 'vote', voter: me, target: action.target, day: d });
       maybeAsides(g, me);
       for (const id of g.voteOrder[d]) if (!g.votes[d].some((v) => v.voter === id)) aiVote(g, id);
-      finishVote(g);
+      enterTrial(g);
+      singleTrialStep(g);
     }
+  } else if (p.type === 'defense') {
+    const intent = action.intent === 'skip' ? 'pass' : action.intent;
+    if (!['deny', 'accuse', 'claim', 'pass'].includes(intent)) throw new Error('invalid intent');
+    if (intent === 'claim' && action.result === undefined) {
+      const c = p.claims.find((x) => x.target === action.target);
+      if (c) action = { ...action, result: c.result };
+    }
+    const st = { ...validateHumanStatement(g, me, { ...action, intent }, g.rounds + 1), final: true };
+    recordDefense(g, st);
+    finishVerdictsWithAI(g);
+  } else if (p.type === 'verdict') {
+    g.trial.verdicts.push({ voter: me, yes: !!action.yes });
+    emit(g, { t: 'verdict', voter: me, yes: !!action.yes, day: g.day });
+    finishVerdictsWithAI(g);
   } else if (p.type === 'night') {
     if (p.action !== 'sleep' && !p.targets.includes(action.target)) throw new Error('invalid target');
     resolveNight(g, action.target ? { [me]: action.target } : {});
   }
   setPending(g);
   return g.events.slice(start);
+}
+
+// Single mode: a rival on trial speaks right away; then the player judges
+// (or, if the player is dead, rivals judge alone).
+function singleTrialStep(g) {
+  if (g.phase !== 'defense' || g.trial.target === HUMAN_ID) return;
+  recordDefense(g, g.defensePlan);
+  if (!isAlive(g, HUMAN_ID)) finishVerdictsWithAI(g);
 }
 
 // When every human is dead, the rest of the game runs without input.
@@ -651,8 +756,10 @@ function autoAdvance(g) {
       advanceRound(g);
     } else if (g.phase === 'vote') {
       for (const id of g.voteOrder[g.day]) if (!g.votes[g.day].some((v) => v.voter === id)) aiVote(g, id);
-      finishVote(g);
-    } else if (g.phase === 'night') resolveNight(g, {});
+      enterTrial(g);
+    } else if (g.phase === 'defense') recordDefense(g, g.defensePlan);
+    else if (g.phase === 'verdict') finishVerdictsWithAI(g);
+    else if (g.phase === 'night') resolveNight(g, {});
   }
 }
 
@@ -663,6 +770,8 @@ export function waitingOn(g) {
   if (g.phase === 'over') return [];
   const hs = aliveHumans(g);
   if (g.phase === 'night') return hs.filter((h) => nightAction(g, h).action !== 'sleep' && !(h in g.nightPicks));
+  if (g.phase === 'defense') return hs.filter((h) => h === g.trial.target && !(h in g.submitted));
+  if (g.phase === 'verdict') return hs.filter((h) => h !== g.trial.target && !(h in g.submitted));
   return hs.filter((h) => !(h in g.submitted));
 }
 
@@ -671,6 +780,8 @@ export function humanOptions(g, h) {
   const others = aliveIds(g).filter((x) => x !== h);
   if (g.phase === 'statement') return { type: 'statement', day: g.day, round: g.round, rounds: g.rounds, targets: others };
   if (g.phase === 'vote') return { type: 'vote', targets: others };
+  if (g.phase === 'defense') return h === g.trial.target ? { type: 'defense', targets: others } : { type: 'wait', target: g.trial.target };
+  if (g.phase === 'verdict') return h === g.trial.target ? { type: 'wait', target: h } : { type: 'verdict', target: g.trial.target };
   return nightAction(g, h);
 }
 
@@ -685,7 +796,15 @@ export function openRound(g) {
 export function submit(g, h, action) {
   if (!isHuman(g, h) || !isAlive(g, h)) throw new Error('not an active player');
   if (g.phase === 'statement') g.submitted[h] = validateHumanStatement(g, h, action);
-  else if (g.phase === 'vote') {
+  else if (g.phase === 'defense') {
+    if (h !== g.trial.target) throw new Error('not on trial');
+    const intent = !action.intent || action.intent === 'skip' ? 'pass' : action.intent;
+    if (!['deny', 'accuse', 'claim', 'pass'].includes(intent)) throw new Error('invalid intent');
+    g.submitted[h] = { ...validateHumanStatement(g, h, { ...action, intent }, g.rounds + 1), final: true };
+  } else if (g.phase === 'verdict') {
+    if (h === g.trial.target) throw new Error('on trial');
+    g.submitted[h] = !!action.yes;
+  } else if (g.phase === 'vote') {
     if (!aliveIds(g).includes(action.target) || action.target === h) throw new Error('invalid target');
     g.submitted[h] = action.target;
   } else if (g.phase === 'night') {
@@ -719,7 +838,19 @@ export function close(g) {
       g.votes[d].push({ voter: h, target, auto: !(h in g.submitted) });
       emit(g, { t: 'vote', voter: h, target, day: d });
     }
-    finishVote(g);
+    enterTrial(g);
+  } else if (g.phase === 'defense') {
+    const t = g.trial.target;
+    const st = isHuman(g, t) ? g.submitted[t] ?? { speaker: t, day: g.day, round: g.rounds + 1, final: true, intent: 'pass', target: null, evidence: [] } : g.defensePlan;
+    recordDefense(g, st);
+  } else if (g.phase === 'verdict') {
+    // Humans who didn't answer abstain.
+    for (const h of aliveHumans(g)) {
+      if (h === g.trial.target || !(h in g.submitted)) continue;
+      g.trial.verdicts.push({ voter: h, yes: g.submitted[h] });
+      emit(g, { t: 'verdict', voter: h, yes: g.submitted[h], day: g.day });
+    }
+    finishVerdictsWithAI(g);
   } else if (g.phase === 'night') {
     resolveNight(g, g.nightPicks);
   }
@@ -770,5 +901,6 @@ export function publicView(g, h = HUMAN_ID) {
     pending: g.pending,
     winner: g.winner,
     seerChecks: g.seerChecks.filter((x) => x.seer === h),
+    trial: g.trial && (g.phase === 'defense' || g.phase === 'verdict') ? { target: g.trial.target, counts: g.trial.counts } : null,
   };
 }
