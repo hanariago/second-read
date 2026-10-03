@@ -11,6 +11,7 @@
 import { createRng } from './rng.js';
 import { CHARACTERS, HUMAN_ID, charById } from './characters.js';
 import { buildTellModel, tellTerm, evidenceForTerm, roleSide } from './tells.js';
+import { HABITS } from './notebook.js';
 
 export const ROLE_KO = { mafia: '마피아', seer: '예언자', doctor: '의사', villager: '시민' };
 
@@ -51,7 +52,7 @@ export function roleDeck(seatCount) {
 }
 
 // Single-player game (kept as the original entry point).
-export function createGame({ n, pastGames = [], memory = true, seed = Date.now(), forceRole = null, rounds = 2, aiSkipRate = 0, aiIds = null }) {
+export function createGame({ n, pastGames = [], memory = true, seed = Date.now(), forceRole = null, rounds = 2, aiSkipRate = 0, aiIds = null, aiHabits = null }) {
   const rng = createRng(seed);
   const humanRole = forceRole ?? roleForGame(n, pastGames, rng);
   return createMatch({
@@ -63,12 +64,13 @@ export function createGame({ n, pastGames = [], memory = true, seed = Date.now()
     rounds,
     aiSkipRate,
     aiIds,
+    aiHabits,
   });
 }
 
 // General entry point. humans: [{ id, n, games, role? }] (games = that player's
 // own past records, supplied by their device for this game only).
-export function createMatch({ mode = 'multi', humans, memory = true, seed = Date.now(), rng = null, rounds = 2, aiSkipRate = AI_SKIP_RATE, aiIds = null }) {
+export function createMatch({ mode = 'multi', humans, memory = true, seed = Date.now(), rng = null, rounds = 2, aiSkipRate = AI_SKIP_RATE, aiIds = null, aiHabits = null }) {
   rng = rng ?? createRng(seed);
   const humanIds = humans.map((h) => h.id);
   aiIds = aiIds ?? CHARACTERS.map((c) => c.id);
@@ -129,6 +131,8 @@ export function createMatch({ mode = 'multi', humans, memory = true, seed = Date
     events: [],
     winner: null,
     pending: null,
+    aiHabits: aiHabits || {},
+    habitFired: new Set(),
     // multi-mode collection buffers
     roundPlan: null,
     submitted: {},
@@ -378,6 +382,7 @@ function decideAIStatements(g) {
         }
       }
     }
+    st = applyHabit(g, cid, st);
     // Don't repeat yourself in a later round.
     if (r > 1 && !st.evidence.length && earlier.some((s) => s.intent === st.intent && s.target === st.target) && g.rng.next() < 0.6) {
       st = { ...st, intent: 'pass', target: null };
@@ -388,6 +393,26 @@ function decideAIStatements(g) {
     out.push(st);
   }
   return out;
+}
+
+// A mafia rival's habit (single mode): what the player can learn to spot.
+function applyHabit(g, cid, st) {
+  const habit = g.aiHabits[cid];
+  if (g.mode !== 'single' || !habit || player(g, cid).role !== 'mafia' || st.evidence.length || st.intent === 'claim') return st;
+  const H = HABITS[habit];
+  if (g.rng.next() >= H.p) return st;
+  const r = st.round;
+  const human = isAlive(g, HUMAN_ID) && player(g, HUMAN_ID).role !== 'mafia' ? HUMAN_ID : null;
+  let next = null;
+  if (habit === 'quiet_first' && r === 1) next = { ...st, intent: 'pass', target: null };
+  else if (habit === 'defends_partner' && r === 1) {
+    const partner = mafiaIds(g).find((id) => id !== cid && isAlive(g, id));
+    if (partner) next = { ...st, intent: 'defend', target: partner };
+  } else if (habit === 'accuses_you' && r === 1 && human) next = { ...st, intent: 'accuse', target: human };
+  else if (habit === 'quick_deny' && accusersBefore(g, cid, st.day, r).length) next = { ...st, intent: 'deny', target: null };
+  if (!next) return st;
+  g.habitFired.add(cid);
+  return next;
 }
 
 function recordStatement(g, st) {
@@ -454,6 +479,10 @@ function aiVote(g, cid, { herd = true } = {}) {
     const fs = frameScores(g, cid);
     const pick = (t) => (fs[t] ?? -99) + 0.4 * (counts[t] || 0);
     choice = cands.slice().sort((a, b) => pick(b) - pick(a))[0];
+    if (g.mode === 'single' && g.aiHabits[cid] === 'votes_you' && isAlive(g, HUMAN_ID) && player(g, HUMAN_ID).role !== 'mafia' && g.rng.next() < HABITS.votes_you.p) {
+      choice = HUMAN_ID;
+      g.habitFired.add(cid);
+    }
     choiceNoTell = choice;
   } else {
     const T = c.personality.temperature;
@@ -901,6 +930,31 @@ export function setLineText(g, st, text) {
 
 // ---------- records & views ----------
 
+// What the player saw each rival do, per day (only literal engine decisions).
+function aiObservations(g, h) {
+  const out = {};
+  for (const p of g.players) {
+    if (p.human) continue;
+    const obs = [];
+    for (const d of Object.keys(g.statements).map(Number)) {
+      const mine = g.statements[d].filter((s) => s.speaker === p.id && !s.final);
+      if (!mine.length) continue;
+      const r1 = mine.find((s) => s.round === 1);
+      if (r1) obs.push({ f: 'ai_pass_r1', v: r1.intent === 'pass' || r1.intent === 'skip', day: d });
+      obs.push({ f: 'ai_defend', v: mine.some((s) => s.intent === 'defend'), day: d });
+      obs.push({ f: 'ai_accuse_you', v: mine.some((s) => s.intent === 'accuse' && s.target === h), day: d });
+      const later = mine.find((s) => s.round > 1);
+      if (later && accusersBefore(g, p.id, d, later.round).length) obs.push({ f: 'ai_deny', v: later.intent === 'deny', day: d });
+    }
+    for (const [d, vs] of Object.entries(g.votes)) {
+      const v = vs.find((x) => x.voter === p.id);
+      if (v) obs.push({ f: 'ai_vote_you', v: v.target === h, day: +d });
+    }
+    out[p.id] = { role: p.role, obs };
+  }
+  return out;
+}
+
 // What one human's device stores after the game.
 export function gameRecord(g, h = g.humanIds[0]) {
   const role = player(g, h).role;
@@ -915,6 +969,11 @@ export function gameRecord(g, h = g.humanIds[0]) {
     obs: g.obs[h].slice(),
     flips: g.flips.filter((f) => f.human === h),
     tellCitations: g.events.filter((e) => (e.t === 'statement' || e.t === 'aside') && e.evidence?.length && e.target === h).length,
+    myVotes: [
+      ...Object.entries(g.votes).flatMap(([d, vs]) => vs.filter((v) => v.voter === h).map((v) => ({ day: +d, target: v.target }))),
+      ...g.events.filter((e) => e.t === 'verdict' && e.voter === h && e.yes).map((e) => ({ day: e.day, target: g.events.find((x) => x.t === 'trial' && x.day === e.day)?.target, verdict: true })),
+    ],
+    ...(g.mode === 'single' ? { aiObs: aiObservations(g, h), habitsShown: [...g.habitFired].filter((id) => player(g, id).role === 'mafia') } : {}),
     days: g.day,
     ts: new Date().toISOString(),
   };

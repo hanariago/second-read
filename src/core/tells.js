@@ -84,7 +84,7 @@ export const TELL_DEFAULTS = {
 export function buildTellModel(games, currentN, opts = {}) {
   const { decay, minGap } = { ...TELL_DEFAULTS, ...opts };
   const model = {};
-  for (const f of FEATURE_IDS) {
+  for (const f of opts.features ?? FEATURE_IDS) {
     const side = {
       mafia: { k: 0, n: 0, rawK: 0, rawN: 0, games: [] },
       town: { k: 0, n: 0, rawK: 0, rawN: 0, games: [] },
@@ -179,12 +179,12 @@ export function evidenceForTerm(model, term, idPrefix, max = 1) {
 }
 
 // Human-readable summary of every tell for the "AI가 본 당신" screen.
-export function describeModel(model) {
-  return FEATURE_IDS.map((f) => {
+export function describeModel(model, features = FEATURE_IDS, labels = FEATURES) {
+  return features.map((f) => {
     const m = model[f];
     return {
       f,
-      label: FEATURES[f].label,
+      label: labels[f].label,
       mafia: { k: m.mafia.rawK, n: m.mafia.rawN, rate: m.pM },
       town: { k: m.town.rawK, n: m.town.rawN, rate: m.pT },
       ready: m.ready,

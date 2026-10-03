@@ -49,7 +49,9 @@ app.whenReady().then(async () => {
       } else if (await has('[data-act="vote"]')) {
         if (!mafia) await wait(4800);
         await click('[data-act="vote"]');
-        await wait(2600);
+        await wait(700);
+        if (await has('.read-flash')) await shot(`g${gnum}-${String(step).padStart(2, '0')}-readflash`);
+        await wait(1900);
         await shot(`g${gnum}-${String(step).padStart(2, '0')}-vote`);
       } else if (await has('[data-act="verdict-yes"]')) {
         await shot(`g${gnum}-${String(step).padStart(2, '0')}-verdict`);

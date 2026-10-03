@@ -126,3 +126,41 @@ test('self-defense: answering an accusation is recorded as a tell and counts in 
   }
   assert.ok(saw, 'some seed has the player accused in round 1');
 });
+
+test('rival habits: assigned per profile, observed literally, may change after being caught', async () => {
+  const { assignHabits, maybeRerollHabits, notebookFor, HABITS } = await import('../src/core/notebook.js');
+  const { createGame, act, gameRecord } = await import('../src/core/engine.js');
+  const h = assignHabits({}, createRng(3).next);
+  assert.equal(Object.keys(h).length, CHARACTERS.length);
+  assert.ok(Object.values(h).every((x) => HABITS[x]));
+  const games = [];
+  const rng = createRng(9);
+  for (let n = 1; n <= 6; n++) {
+    const g = createGame({ n, pastGames: games, seed: n * 13, aiHabits: h });
+    let guard = 0;
+    while (g.pending && guard++ < 200) {
+      const p = g.pending;
+      if (p.type === 'spectate') act(g, { type: 'continue' });
+      else if (p.type === 'statement') act(g, { intent: 'pass' });
+      else if (p.type === 'vote') act(g, { type: 'vote', target: rng.pick(p.targets) });
+      else if (p.type === 'defense') act(g, { intent: 'deny' });
+      else if (p.type === 'verdict') act(g, { yes: true });
+      else act(g, p.action === 'sleep' ? {} : { target: rng.pick(p.targets) });
+    }
+    const rec = gameRecord(g);
+    assert.ok(rec.aiObs && Object.keys(rec.aiObs).length === CHARACTERS.length);
+    games.push(rec);
+  }
+  // Notebook counts equal the stored observations.
+  for (const c of CHARACTERS) {
+    for (const row of notebookFor(games, c.id, 7)) {
+      const all = games.flatMap((g) => (g.aiObs[c.id].role === 'mafia' ? g.aiObs[c.id].obs : []).filter((o) => o.f === row.f));
+      assert.equal(row.mafia.n, all.length);
+      assert.equal(row.mafia.k, all.filter((o) => o.v).length);
+    }
+  }
+  const caught = { habitsShown: ['leon'], myVotes: [{ day: 1, target: 'leon' }] };
+  const r = maybeRerollHabits({ ...h }, caught, () => 0);
+  assert.deepEqual(r.changed, ['leon']);
+  assert.notEqual(r.habits.leon, h.leon);
+});

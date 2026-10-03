@@ -9,6 +9,8 @@ import { templateLine, humanLine, withName } from '../src/ai/templates.js';
 import { sceneSummary, todayChat } from '../src/ai/prompts.js';
 import { createBridgeStore, createLocalStorageStore } from '../src/store/tellStore.js';
 import { setupMulti } from './multi.js';
+import { assignHabits, maybeRerollHabits, notebookFor, seatNote } from '../src/core/notebook.js';
+import { FEATURES } from '../src/core/tells.js';
 
 const bridge = window.secondRead ?? null;
 const store = bridge ? createBridgeStore(bridge) : createLocalStorageStore();
@@ -204,7 +206,10 @@ function newGame() {
     pastGames: S.profile.games,
     memory: S.profile.settings.memory !== false,
     seed: (Math.random() * 2 ** 31) | 0,
+    aiHabits: S.profile.aiHabits,
   });
+  // Notes from past games only; this game's roles are never reflected here.
+  S.seatNotes = Object.fromEntries(CHARACTERS.map((c) => [c.id, seatNote(S.profile.games, c.id, n)]));
   S.feed = [];
   S.gm = { n, start: Date.now(), calls: 0, failures: 0, rejected: 0, inputTokens: 0, outputTokens: 0, samples: [], ai: S.aiOn };
   updateBadges();
@@ -232,6 +237,15 @@ function newGame() {
     </div>`);
   pushFeed({ kind: 'system', text: `${n}판 시작 — 1일차 낮. 모두 한 마디씩 합니다.` });
   renderActions();
+}
+
+// The "들켰다" moment: a rival calls you out from memory. Never blocks input.
+function readFlash(speaker, text) {
+  const el = document.createElement('div');
+  el.className = 'read-flash';
+  el.innerHTML = `<img src="${portrait(speaker)}" alt="" /><div><div class="rf-kicker">${esc(displayName(speaker))}에게</div><div class="rf-title">읽혔다</div><div class="rf-text">${esc(text)}</div></div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
 }
 
 function pushFeed(item) {
@@ -270,7 +284,8 @@ function seatsHtml() {
         <img src="${portrait(p.id)}" alt="" />
         <div class="seat-name">${esc(displayName(p.id))} ${role}</div>
         <div class="seat-sub">${c ? esc(c.title) : '플레이어'}</div>
-        ${c ? `<div class="seat-watch" title="이 라이벌이 지켜보는 습관">👁 ${esc(c.watchLabel)}</div>` : ''}
+        ${c ? `<div class="seat-watch" title="이 라이벌이 지켜보는 당신의 습관">👁 ${esc(c.watchLabel)}</div>` : ''}
+        ${S.seatNotes?.[p.id] ? `<div class="seat-note" title="내 노트: 지난 판들에서 본 이 라이벌">📓 ${esc(S.seatNotes[p.id])}</div>` : ''}
         ${check ? `<div class="seat-check ${check.result}">조사: ${check.result === 'mafia' ? '마피아' : '시민'}</div>` : ''}
         ${counts[p.id] ? `<div class="votes">${'●'.repeat(counts[p.id])}</div>` : ''}
         ${voted[p.id] ? `<div class="voted">→ ${esc(displayName(voted[p.id]))}</div>` : ''}
@@ -441,10 +456,13 @@ async function processEvents(events) {
       for (let k = 0; k < batch.length; k++) {
         setLineText(g, batch[k], lines[k].text);
         pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length, final: batch[k].final });
+        if (batch[k].evidence?.length && batch[k].target === HUMAN_ID && batch[k].intent === 'accuse') readFlash(batch[k].speaker, lines[k].text);
         await sleep(450);
       }
     } else if (ev.t === 'aside') {
-      pushFeed({ kind: 'line', speaker: ev.speaker, text: templateLine({ ...ev }), evidence: ev.evidence, memory: true });
+      const text = templateLine({ ...ev });
+      pushFeed({ kind: 'line', speaker: ev.speaker, text, evidence: ev.evidence, memory: true });
+      if (ev.kind === 'suspect') readFlash(ev.speaker, text);
       await sleep(700);
     } else if (ev.t === 'vote') {
       pushFeed({ kind: 'vote', voter: ev.voter, target: ev.target });
@@ -489,9 +507,12 @@ async function finishGame() {
   const g = S.game;
   const record = gameRecord(g);
   S.profile = addGame(S.profile, record);
+  // A rival caught with its habit may quietly change it.
+  const { habits, changed } = maybeRerollHabits(S.profile.aiHabits, record);
+  S.profile = { ...S.profile, aiHabits: habits };
   await store.save(S.profile);
   const report = rivalReport(S.profile, record);
-  S.lastReport = { report, record, roles: Object.fromEntries(g.players.map((p) => [p.id, p.role])), remarks: null };
+  S.lastReport = { report, record, roles: Object.fromEntries(g.players.map((p) => [p.id, p.role])), remarks: null, habitChanged: changed };
   renderReport();
   const mine = S.lastReport;
   // End-of-game remarks are templates built from the same evidence (no plan usage).
@@ -549,9 +570,24 @@ function renderReport() {
         })
         .join('');
       const rf = r.flips.map((f) => `<div class="flip ${f.kind}"><b>${FLIP_LABEL[f.kind][0]}</b> ${f.day}일차 ${f.verdict ? '최후 판결' : '투표'} — ${esc(FLIP_LABEL[f.kind][1])}</div>`).join('');
+      // First games: the rival hasn't got a tell on you yet, so it shows its notes and promises to compare.
+      const ready = r.tells.some((x) => x.ready);
+      const watched = (record.obs || []).filter((o) => charById[r.id].watches.includes(o.f));
+      const memoParts = [...new Set(watched.map((o) => o.f))].map((f) => {
+        const xs = watched.filter((o) => o.f === f);
+        return `'${FEATURES[f].label}' ${xs.filter((o) => o.v).length}/${xs.length}`;
+      });
+      const memo = !ready && memoParts.length ? `<div class="memo">📝 ${esc(r.name)}의 메모: 이번 판(${ROLE_KO[record.role]}) ${esc(memoParts.join(', '))}. ${record.side === 'mafia' ? '시민' : '마피아'}일 때와 비교해 볼게요.</div>` : '';
+      const nb = record.aiObs ? notebookFor(S.profile.games, r.id, nextGameNumber(S.profile)).filter((x) => x.mafia.n || x.town.n) : [];
+      const notebook = nb.length
+        ? `<details class="notebook" ${nb.some((x) => x.ready) ? 'open' : ''}><summary>📓 내가 본 ${esc(r.name)}</summary>${nb
+            .map((x) => `<div class="nb-row ${x.ready ? 'ready' : ''}">${esc(x.label)} <span class="muted">마피아 ${x.mafia.n ? `${x.mafia.k}/${x.mafia.n}` : '—'} · 시민 ${x.town.n ? `${x.town.k}/${x.town.n}` : '—'}</span>${x.ready ? ` <span class="tag">${x.gap > 0 ? '마피아일 때 더' : '시민일 때 더'}</span>` : ''}</div>`)
+            .join('')}</details>`
+        : '';
+      const changedNote = S.lastReport.habitChanged?.includes(r.id) ? `<div class="memo">😏 ${esc(r.name)}: 들킨 걸 눈치챈 것 같습니다. 다음 판부터 버릇이 바뀔 수 있어요.</div>` : '';
       return `<div class="rival">
         <div class="rival-head"><img src="${portrait(r.id)}" alt="" /><div><div class="rival-name">${esc(r.name)} ${roles[r.id] ? `<span class="role-tag ${roles[r.id]}">${ROLE_KO[roles[r.id]]}</span>` : ''}</div><div class="muted">지켜보는 것: ${esc(r.watchLabel)}</div></div></div>
-        ${rows}${rf}
+        ${rows}${rf}${memo}${notebook}${changedNote}
         <div class="remark">${remark ? `“${esc(remark)}”` : '<span class="muted">…</span>'}</div>
       </div>`;
     })
@@ -761,6 +797,10 @@ $('#settingsBtn').addEventListener('click', () => {
 
 (async function init() {
   S.profile = await store.load();
+  if (!S.profile.aiHabits) {
+    S.profile = { ...S.profile, aiHabits: assignHabits() };
+    await store.save(S.profile);
+  }
   S.info = bridge ? await bridge.info() : null;
   await refreshAuth();
   renderTitle();
