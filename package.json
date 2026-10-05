@@ -11,9 +11,9 @@
     "start": "electron .",
     "sim": "node sim/simulate.mjs",
     "test": "node --test test/*.test.js",
-    "dist:mac": "electron-builder --mac",
+    "dist:mac": "electron-builder --mac -c.mac.identity=-",
     "dist:win": "electron-builder --win",
-    "dist": "electron-builder --mac --win",
+    "dist": "electron-builder --mac --win -c.mac.identity=-",
     "selfcheck": "SECOND_READ_SELFCHECK=${TMPDIR:-/tmp}/second-read-selfcheck electron .",
     "relay": "cd server && wrangler dev --port 8787 --ip 127.0.0.1",
     "test:multi": "node test/multi.e2e.mjs",
@@ -62,7 +62,6 @@
         }
       ],
       "category": "public.app-category.games",
-      "identity": "-",
       "hardenedRuntime": false
     },
     "win": {

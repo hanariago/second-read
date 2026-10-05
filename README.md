@@ -105,6 +105,8 @@ npm run dist:mac     # macOS universal dmg/zip (ad-hoc 서명)
 npm run dist:win     # Windows x64 zip + 설치 파일
 ```
 
+CI(`.github/workflows/ci.yml`)는 저장소 Secrets에 `MAC_CERT_P12_BASE64`·`MAC_CERT_PASSWORD`·`APPLE_ID`·`APPLE_APP_SPECIFIC_PASSWORD`·`APPLE_TEAM_ID`(mac), `WIN_CERT_P12_BASE64`·`WIN_CERT_PASSWORD`(Windows)를 넣으면 자동으로 서명·공증 빌드를 만듭니다. 태그(v*)를 푸시하거나 수동 실행하면 mac·Windows에서 실제 앱 셀프체크와 빌드, Windows 실행 확인까지 돕니다.
+
 외장 디스크(exFAT 등)에서 mac universal 빌드가 asar 읽기 오류로 실패하면 출력 폴더를 로컬 디스크로 지정하세요: `npx electron-builder --mac -c.directories.output=/tmp/second-read-dist`.
 
 ### 서명·공증 (선택)
@@ -114,7 +116,7 @@ npm run dist:win     # Windows x64 zip + 설치 파일
 ```bash
 CSC_NAME="Developer ID Application: <이름> (<팀ID>)" \
 APPLE_ID=<apple id> APPLE_APP_SPECIFIC_PASSWORD=<앱 암호> APPLE_TEAM_ID=<팀ID> \
-npx electron-builder --mac -c.mac.identity="$CSC_NAME" -c.mac.hardenedRuntime=true -c.mac.notarize=true
+npx electron-builder --mac -c.mac.hardenedRuntime=true -c.mac.notarize=true
 ```
 
 ## 저장 위치

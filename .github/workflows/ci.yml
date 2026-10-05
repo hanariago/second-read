@@ -62,9 +62,9 @@ jobs:
         shell: bash
         run: |
           if [ -n "$CSC_LINK" ]; then
-            npx electron-builder --mac -c.mac.identity=null -c.mac.hardenedRuntime=true -c.mac.notarize=true --publish never
+            npx electron-builder --mac -c.mac.hardenedRuntime=true -c.mac.notarize=true --publish never
           else
-            npx electron-builder --mac --publish never
+            npx electron-builder --mac -c.mac.identity=- --publish never
           fi
       - name: Build (Windows)
         if: runner.os == 'Windows'
