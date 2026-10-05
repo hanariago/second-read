@@ -46,7 +46,7 @@ function clueScore(g, t) {
 
 function play(policy, seed, forceRole) {
   const rng = createRng(seed ^ 0x51ed);
-  const g = createGame({ n: 1, seed, forceRole });
+  const g = createGame({ n: 1, seed, forceRole, tableSize: +(process.env.SIZE || 7) });
   let guard = 0;
   while (g.pending && guard++ < 300) {
     const p = g.pending;

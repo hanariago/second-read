@@ -100,6 +100,38 @@ export const CHARACTERS = [
     watchLabel: '해명과 밤의 흔적',
     color: '#7a6bd1',
   },
+  {
+    id: 'doyun',
+    name: '도윤',
+    title: '신입 변호사',
+    personality: {
+      summary: '논리로 따진다. 말과 행동이 어긋나는 걸 못 참는다.',
+      voice: '또박또박한 존댓말, 따지는 말투, "이의 있습니다"',
+      aggression: 0.8,
+      temperature: 0.4,
+      grudge: 0.25,
+      trustSeer: 0.75,
+    },
+    watches: ['vote_own_accused', 'deny_when_accused', 'stance_accuse'],
+    watchLabel: '말과 표의 앞뒤',
+    color: '#8c2f3a',
+  },
+  {
+    id: 'hajun',
+    name: '하준',
+    title: '심야 택시 기사',
+    personality: {
+      summary: '말수가 적고 오래 지켜본다. 밤에 무슨 일이 있었는지 곱씹는다.',
+      voice: '툭툭 던지는 반말, 짧은 문장, 사투리 살짝',
+      aggression: 0.65,
+      temperature: 0.5,
+      grudge: 0.4,
+      trustSeer: 0.7,
+    },
+    watches: ['victim_accuser', 'vote_first'],
+    watchLabel: '밤의 흔적과 타이밍',
+    color: '#5f6b3a',
+  },
 ];
 
 export const charById = Object.fromEntries(CHARACTERS.map((c) => [c.id, c]));

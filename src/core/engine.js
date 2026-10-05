@@ -16,16 +16,17 @@ import { HABITS } from './notebook.js';
 // Habits a rival can predict before a game: always observed on day 1.
 export const PREDICTABLE_FEATURES = ['stance_accuse', 'stance_pass', 'vote_first'];
 
-export const ROLE_KO = { mafia: '마피아', seer: '예언자', doctor: '의사', villager: '시민' };
+export const ROLE_KO = { mafia: '마피아', seer: '예언자', doctor: '의사', soldier: '군인', politician: '정치인', villager: '시민' };
+export const TABLE_SIZES = [5, 7, 9];
 
-const HERD = { leon: 0.2, mio: 0.4, bruno: -0.1, sera: 0.15, kai: 0.5, noa: 0.1 };
+const HERD = { leon: 0.2, mio: 0.4, bruno: -0.1, sera: 0.15, kai: 0.5, noa: 0.1, doyun: 0.0, hajun: 0.25 };
 const EVIDENCE_THRESHOLD = 0.35; // |tell term| needed before a rival cites memory
 export const AI_SKIP_RATE = 0.2;
 export const MAX_DAYS = 4; // if the town hasn't caught everyone by then, the mafia wins // multi: humans skip rounds, so rivals sometimes do too
 
 // First single-player games are scheduled so both roles get observed quickly:
 // tells are role differences, so the AI needs at least one game of each.
-export function roleForGame(n, pastGames, rng) {
+export function roleForGame(n, pastGames, rng, seatCount = 7) {
   const sides = pastGames.map((g) => roleSide(g.role));
   let side;
   if (n === 1) side = 'town';
@@ -38,26 +39,36 @@ export function roleForGame(n, pastGames, rng) {
     else side = rng.next() < 0.45 ? 'mafia' : 'town';
   }
   if (side === 'mafia') return 'mafia';
+  // Any special town role that exists at this table size, else a plain villager.
+  const specials = roleDeck(seatCount).filter((r) => r !== 'mafia' && r !== 'villager');
   const r = rng.next();
-  return r < 0.25 ? 'seer' : r < 0.45 ? 'doctor' : 'villager';
+  return r < 0.22 * specials.length ? specials[Math.floor(r / 0.22)] : 'villager';
 }
 
-// 7+ seats: two mafia who know each other; 6+ seats add a doctor.
+// Roles grow with the table, like real mafia:
+//   5-6: 1 mafia, seer, doctor   7: 2 mafia (who know each other), seer, doctor
+//   8: + soldier (survives one night attack)   9: 3 mafia, + politician (can't be voted out)
 // Rooms fill to 7 seats (8 with four people); at least 4 rivals so people can hide among them.
 export function aiCountFor(humans) {
   return Math.max(4, Math.min(CHARACTERS.length, 7 - humans));
 }
 
 export function roleDeck(seatCount) {
-  const mafia = seatCount >= 7 ? 2 : 1;
-  const doctor = seatCount >= 6 ? 1 : 0;
-  return [...Array(mafia).fill('mafia'), 'seer', ...Array(doctor).fill('doctor'), ...Array(seatCount - mafia - 1 - doctor).fill('villager')];
+  const deck = [...Array(seatCount >= 9 ? 3 : seatCount >= 7 ? 2 : 1).fill('mafia'), 'seer'];
+  if (seatCount >= 5) deck.push('doctor');
+  if (seatCount >= 8) deck.push('soldier');
+  if (seatCount >= 9) deck.push('politician');
+  while (deck.length < seatCount) deck.push('villager');
+  return deck;
 }
 
 // Single-player game (kept as the original entry point).
-export function createGame({ n, pastGames = [], memory = true, seed = Date.now(), forceRole = null, rounds = 2, aiSkipRate = 0, aiIds = null, aiHabits = null }) {
+export function createGame({ n, pastGames = [], memory = true, seed = Date.now(), forceRole = null, rounds = 2, aiSkipRate = 0, aiIds = null, aiHabits = null, tableSize = 7 }) {
   const rng = createRng(seed);
-  const humanRole = forceRole ?? roleForGame(n, pastGames, rng);
+  const size = Math.max(5, Math.min(CHARACTERS.length + 1, tableSize));
+  // Which rivals sit at the table this time (all of them at the biggest table).
+  aiIds = aiIds ?? rng.shuffle(CHARACTERS.map((c) => c.id)).slice(0, size - 1);
+  const humanRole = forceRole ?? roleForGame(n, pastGames, rng, aiIds.length + 1);
   const g = createMatch({
     mode: 'single',
     humans: [{ id: HUMAN_ID, n, games: pastGames, role: humanRole }],
@@ -174,6 +185,8 @@ export function createMatch({ mode = 'multi', humans, memory = true, seed = Date
     asked: {}, // day -> true once the player used their question
     mafiaPlan: {}, // day -> shared mafia vote target
     predMult: {}, // rivalId -> multiplier on their memory term this game
+    revealed: {}, // id -> role made public mid-game (soldier who survived, politician spared)
+    armorUsed: {},
     prediction: null,
     // multi-mode collection buffers
     roundPlan: null,
@@ -319,6 +332,7 @@ function suspicion(g, cid, t) {
     }
     add('i_am_seer', w);
   }
+  if (g.revealed[t]) add(g.revealed[t] === 'soldier' ? 'revealed_soldier' : 'revealed_politician', -4);
   const base = reasons.reduce((a, r) => a + r.w, 0);
   let tell = 0;
   let term = null;
@@ -755,7 +769,11 @@ function resolveVerdict(g) {
   const { target, day, verdicts, counts, tie } = g.trial;
   const yes = verdicts.filter((v) => v.yes).length;
   const no = verdicts.length - yes;
-  if (yes > no) {
+  if (yes > no && player(g, target).role === 'politician') {
+    // A politician can't be voted out; the attempt reveals them.
+    g.revealed[target] = 'politician';
+    emit(g, { t: 'immune', target, yes, no, day });
+  } else if (yes > no) {
     const p = player(g, target);
     p.alive = false;
     g.deaths.push({ id: target, day, how: 'vote', role: p.role });
@@ -845,6 +863,14 @@ function resolveNight(g, picks) {
   }
   const saved = victim && victim === protectedId;
   if (saved) victim = null;
+  // A soldier shrugs off the first attack and is revealed.
+  let armored = null;
+  if (victim && player(g, victim).role === 'soldier' && !g.armorUsed[victim]) {
+    g.armorUsed[victim] = true;
+    g.revealed[victim] = 'soldier';
+    armored = victim;
+    victim = null;
+  }
   const sid = seerId(g);
   if (isAlive(g, sid)) {
     if (!isHuman(g, sid)) {
@@ -868,9 +894,9 @@ function resolveNight(g, picks) {
       if (accusers.length) g.obs[h].push({ f: 'victim_accuser', v: accusers.includes(victim), day: d });
     }
     emit(g, { t: 'night', victim, role: p.role, day: d });
-  } else emit(g, { t: 'night', victim: null, saved, day: d });
+  } else emit(g, { t: 'night', victim: null, saved, armored, day: d });
   if (checkWin(g)) return;
-  if (d >= MAX_DAYS) return endByTime(g);
+  if (d >= MAX_DAYS + (g.players.length >= 9 ? 1 : 0)) return endByTime(g);
   g.day += 1;
   g.round = 1;
   g.phase = 'statement';
@@ -1180,7 +1206,7 @@ export function publicView(g, h = HUMAN_ID) {
     players: g.players.map((p) => ({
       id: p.id,
       alive: p.alive,
-      role: p.id === h || !p.alive || g.phase === 'over' || (p.role === 'mafia' && player(g, h)?.role === 'mafia') ? p.role : null,
+      role: p.id === h || !p.alive || g.phase === 'over' || g.revealed[p.id] || (p.role === 'mafia' && player(g, h)?.role === 'mafia') ? p.role : null,
     })),
     votes: g.votes[g.day] ? g.votes[g.day].slice() : [],
     pending: g.pending,

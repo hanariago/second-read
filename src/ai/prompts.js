@@ -54,6 +54,8 @@ const CASUAL_HINTS = {
   sera: '살짝 존댓말 섞음, 차분하게 찌름',
   kai: '리액션 크고 유행어, 느낌표',
   noa: '부드럽고 걱정하는 말투, 존댓말 섞음',
+  doyun: '따지는 말투, 논리적, 존댓말',
+  hajun: '말수 적고 툭툭, 반말',
 };
 
 export function sceneSummary(g, nameOf = displayName) {

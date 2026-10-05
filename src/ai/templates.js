@@ -107,6 +107,33 @@ V.noa = {
   claimBare: ['제가 진짜 예언자예요. 믿어 주세요.'],
 };
 
+V.doyun = {
+  accuse: ['{t} 씨, 이의 있습니다. 앞뒤가 안 맞아요.', '{t} 씨 진술은 신빙성이 떨어집니다.'],
+  defend: ['{t} 씨를 의심할 근거는 부족합니다.', '{t} 씨는 일관됐어요. 넘어가죠.'],
+  pass: ['증거가 더 필요합니다.', '아직 판단을 보류하겠습니다.'],
+  claimMafia: ['예언자로서 진술합니다. {t} 씨, 마피아입니다.'],
+  claimTown: ['예언자로서 진술합니다. {t} 씨는 시민입니다.'],
+  claimBare: ['정정합니다. 진짜 예언자는 저입니다.'],
+  memory: ['{ev}. 진술이 매번 같은 방향이네요.', '{ev}. 기록이 말해 줍니다.'],
+  clear: ['{ev}. 시민일 때의 진술과 일치합니다.'],
+  asideSuspect: ['{ev}. 기록해 두죠.'],
+  asideClear: ['{ev}. 이번엔 다르군요.'],
+  deny: ['저는 아닙니다. 근거를 대 보세요.'],
+};
+V.hajun = {
+  accuse: ['{t}, 수상해. 내 눈엔 그래.', '{t} 쪽이 영 찜찜하네.'],
+  defend: ['{t}는 아냐. 그냥 알아.', '{t} 그만 몰아.'],
+  pass: ['좀 더 보자고.', '...지켜보는 중이야.'],
+  claimMafia: ['나 예언자야. {t}, 마피아로 나왔어.'],
+  claimTown: ['나 예언자야. {t}는 시민이었고.'],
+  claimBare: ['예언자는 나야. 저건 가짜고.'],
+  memory: ['{ev}. 손님들 버릇은 안 변하더라.', '{ev}. 또 그러네.'],
+  clear: ['{ev}. 시민 때 그대로야.'],
+  asideSuspect: ['{ev}. 흠.'],
+  asideClear: ['{ev}. 웬일이래.'],
+  deny: ['나 아냐. 괜히 헛심 쓰지 마.'],
+};
+
 // Multiplayer: rivals must read like people in a group chat, so the fallback
 // lines are short, casual and identical in tone for every seat.
 const CASUAL = {
@@ -132,6 +159,8 @@ function casualLine(spec, s, nameOf) {
 }
 
 const REMARK_EMPTY = {
+  doyun: '아직 판단할 근거가 부족합니다. 다음 판에 보죠.',
+  hajun: '아직 잘 모르겠네. 다음에 또 보자고.',
   kai: '아직 너 분석 덜 됐다~ 다음 판 기대해!',
   noa: '아직 잘 모르겠어요. 다음 판에 또 봬요.',
   leon: '아직 표본이 부족합니다. 다음 판에 다시 계산하죠.',

@@ -144,7 +144,8 @@ export function setupMulti(ctx) {
       if (m.executed) {
         M.alive[m.executed.seat] = false;
         pushFeed({ kind: 'sys', text: `찬성 ${m.yes} : 반대 ${m.no} — ${nameOf(m.executed.seat)} 처형. 정체: ${ROLE_KO[m.executed.role]}` });
-      } else pushFeed({ kind: 'sys', text: `찬성 ${m.yes} : 반대 ${m.no} — ${nameOf(m.target)} 살아남음.` });
+      } else if (m.immune) pushFeed({ kind: 'sys', text: `찬성 ${m.yes} : 반대 ${m.no} — ${nameOf(m.target)}는 정치인이라 처형되지 않음.` });
+      else pushFeed({ kind: 'sys', text: `찬성 ${m.yes} : 반대 ${m.no} — ${nameOf(m.target)} 살아남음.` });
       renderSeats();
     }
     else if (m.t === 'ack') {
@@ -172,7 +173,8 @@ export function setupMulti(ctx) {
       if (m.victim) {
         M.alive[m.victim.seat] = false;
         pushFeed({ kind: 'sys', text: `밤사이 ${nameOf(m.victim.seat)} 쓰러짐. 정체: ${ROLE_KO[m.victim.role]}` });
-      } else pushFeed({ kind: 'sys', text: m.saved ? '조용한 밤. 누군가 의사 덕에 살았다.' : '조용한 밤.' });
+      } else if (m.armored) pushFeed({ kind: 'sys', text: `밤사이 ${nameOf(m.armored)}가 습격을 버텨냄. 군인이었다.` });
+      else pushFeed({ kind: 'sys', text: m.saved ? '조용한 밤. 누군가 의사 덕에 살았다.' : '조용한 밤.' });
       renderSeats();
     } else if (m.t === 'over') finishGame(m);
   }
@@ -205,7 +207,11 @@ export function setupMulti(ctx) {
           ? '밤마다 한 명을 조사합니다.'
           : M.role === 'doctor'
             ? '밤마다 한 명을 지킵니다.'
-            : '마피아를 찾아 처형하세요.';
+            : M.role === 'soldier'
+              ? '습격을 한 번 버텨냅니다.'
+              : M.role === 'politician'
+                ? '투표로는 처형되지 않습니다.'
+                : '마피아를 찾아 처형하세요.';
     showModal(`<div class="role-card ${M.role}"><div class="role-kicker">내 닉네임 ${esc(nameOf(M.seat))}</div><div class="role-name">${ROLE_KO[M.role]}</div><p>${goal}</p><p class="hint">누가 사람이고 누가 AI인지는 끝날 때 공개됩니다.</p><button class="primary" data-act="closeModal">시작</button></div>`);
     pushFeed({ kind: 'sys', text: '1일차 낮. 각자 쓰고, 다 같이 공개됩니다.' });
   }

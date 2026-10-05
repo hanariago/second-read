@@ -1,5 +1,5 @@
 // Game UI. All input is clicks; the engine decides, dialogue only renders.
-import { createGame, act, gameRecord, publicView, setLineText, mafiaTeam, ROLE_KO } from '../src/core/engine.js';
+import { createGame, act, gameRecord, publicView, setLineText, mafiaTeam, roleDeck, ROLE_KO, TABLE_SIZES } from '../src/core/engine.js';
 import { parseIntent } from '../src/core/intent.js';
 import { CHARACTERS, HUMAN_ID, charById, displayName } from '../src/core/characters.js';
 import { nextGameNumber, addGame, rivalReport, remarkSpecs, tallies, emptyProfile } from '../src/core/profile.js';
@@ -137,6 +137,15 @@ function chatgptButton(label = 'Continue with ChatGPT', act = 'signIn') {
 
 const sound = createSound(() => S.profile.settings);
 
+// Table size: roles grow with the number of players.
+function tablePicker() {
+  const cur = S.profile.settings.tableSize ?? 7;
+  const deck = roleDeck(cur);
+  const count = (r) => deck.filter((x) => x === r).length;
+  const parts = ['mafia', 'seer', 'doctor', 'soldier', 'politician', 'villager'].filter((r) => count(r)).map((r) => `${ROLE_KO[r]} ${count(r)}`);
+  return `<div class="table-picker"><span class="muted small">인원</span>${TABLE_SIZES.map((n) => `<button class="${n === cur ? 'on' : ''}" data-act="tableSize" data-n="${n}">${n}명</button>`).join('')}<div class="muted small">${parts.join(' · ')}</div></div>`;
+}
+
 function rivalryLine() {
   const r = S.profile.rivalry || {};
   const rows = CHARACTERS.filter((c) => r[c.id] && (r[c.id].win || r[c.id].loss));
@@ -178,16 +187,16 @@ function renderTitle(msg = '') {
   if (S.signingIn) {
     main = `<p class="hint">브라우저에서 ChatGPT 로그인을 마치면 자동으로 돌아옵니다.</p><button class="ghost" data-act="cancelSignIn">취소</button>`;
   } else if (a.signedIn && a.planEnabled) {
-    main = `<button class="primary big" data-act="newGame">${n}판째 시작</button>
+    main = `${tablePicker()}<button class="primary big" data-act="newGame">${n}판째 시작</button>
       <p class="hint">${esc(a.account?.label || 'ChatGPT 계정')}${a.account?.email ? ` · ${esc(a.account.email)}` : ''}</p>`;
   } else if (a.signedIn && !a.planEnabled) {
     main = `<p class="warn">ChatGPT 플랜 사용 권한이 허용되지 않아 AI 대사를 쓸 수 없어요.</p>
       ${chatgptButton('Continue with ChatGPT', 'reconsent')}
-      <button class="link" data-act="offline">AI 없이 규칙 체험</button>`;
+      ${tablePicker()}<button class="link" data-act="offline">AI 없이 규칙 체험</button>`;
   } else {
     main = `${chatgptButton()}
       <p class="hint">ChatGPT Plus 또는 Pro 구독자만 AI 플레이가 가능합니다. 로그인하면 AI 라이벌의 대사가 본인 ChatGPT 플랜 사용량으로 생성됩니다.</p>
-      <button class="link" data-act="offline">AI 없이 규칙 체험</button>`;
+      ${tablePicker()}<button class="link" data-act="offline">AI 없이 규칙 체험</button>`;
   }
   $('#screen').innerHTML = `
   <section class="title">
@@ -244,6 +253,7 @@ function newGame() {
     memory: S.profile.settings.memory !== false,
     seed: (Math.random() * 2 ** 31) | 0,
     aiHabits: S.profile.aiHabits,
+    tableSize: S.profile.settings.tableSize ?? 7,
   });
   // Notes from past games only; this game's roles are never reflected here.
   S.seatNotes = Object.fromEntries(CHARACTERS.map((c) => [c.id, seatNote(S.profile.games, c.id, n)]));
@@ -254,14 +264,15 @@ function newGame() {
   renderGame();
   const role = S.game.humanRole;
   const partners = mafiaTeam(S.game, HUMAN_ID);
-  const goal =
-    role === 'mafia'
-      ? `동료 ${partners.map((x) => displayName(x)).join(', ')}와 함께 들키지 않고 살아남으세요. 밤마다 한 명을 제거합니다.`
-      : role === 'seer'
-        ? '밤마다 한 명의 정체를 조사합니다. 마피아 2명을 투표로 처형하세요.'
-        : role === 'doctor'
-          ? '밤마다 한 명을 지킵니다(자신도 가능). 마피아 2명을 찾아내세요.'
-          : '마피아 2명을 찾아 투표로 처형하세요.';
+  const mafiaN = S.game.players.filter((p) => p.role === 'mafia').length;
+  const goal = {
+    mafia: partners.length ? `동료 ${partners.map((x) => displayName(x)).join(', ')}와 함께 들키지 않고 살아남으세요. 밤마다 한 명을 제거합니다.` : '혼자 들키지 않고 살아남으세요. 밤마다 한 명을 제거합니다.',
+    seer: `밤마다 한 명의 정체를 조사합니다. 마피아 ${mafiaN}명을 투표로 처형하세요.`,
+    doctor: `밤마다 한 명을 지킵니다(자신도 가능). 마피아 ${mafiaN}명을 찾아내세요.`,
+    soldier: `마피아의 습격을 한 번 버텨냅니다(그때 정체가 공개돼요). 마피아 ${mafiaN}명을 찾아내세요.`,
+    politician: `투표로는 처형되지 않습니다(그때 정체가 공개돼요). 마피아 ${mafiaN}명을 찾아내세요.`,
+    villager: `마피아 ${mafiaN}명을 찾아 투표로 처형하세요.`,
+  }[role];
   const firstTime = n <= 2;
   showModal(`
     <div class="role-card ${role}">
@@ -633,10 +644,14 @@ async function processEvents(events) {
       const no = batch.filter((v) => !v.yes).map((v) => displayName(v.voter));
       pushFeed({ kind: 'system', text: `처형 찬성: ${yes.join(', ') || '없음'} / 반대: ${no.join(', ') || '없음'}` });
       await sleep(500);
+    } else if (ev.t === 'immune') {
+      pushFeed({ kind: 'alert', text: `찬성 ${ev.yes} : 반대 ${ev.no} — 그러나 ${withName('{t}는', ev.target)} 정치인이라 투표로 처형되지 않습니다.` });
+      refreshSeats();
     } else if (ev.t === 'spared') {
       pushFeed({ kind: 'system', text: `찬성 ${ev.yes} : 반대 ${ev.no} — ${withName('{t}는', ev.target)} 살아남았습니다.` });
     } else if (ev.t === 'night') {
       if (ev.victim) pushFeed({ kind: 'system', text: `밤사이 ${withName('{t}가', ev.victim)} 쓰러졌습니다. 정체: ${ROLE_KO[ev.role]}` });
+      else if (ev.armored) pushFeed({ kind: 'alert', text: `밤사이 ${withName('{t}가', ev.armored)} 습격을 버텨냈습니다. 군인이었습니다.` });
       else pushFeed({ kind: 'system', text: ev.saved ? '조용한 밤이었습니다. 누군가 의사의 손에 살아났습니다.' : '조용한 밤이었습니다.' });
     } else if (ev.t === 'seerResult') {
       pushFeed({ kind: 'private', text: `조사 결과(당신만 봄): ${withName(`{t}는 ${ev.result === 'mafia' ? '마피아' : '시민'}입니다.`, ev.target)}` });
@@ -904,6 +919,10 @@ document.addEventListener('click', async (e) => {
     case 'ask':
       S.askTarget = null;
       return doAct({ type: 'ask', target: t, q: b.dataset.q });
+    case 'tableSize':
+      S.profile = { ...S.profile, settings: { ...S.profile.settings, tableSize: +b.dataset.n } };
+      await store.save(S.profile);
+      return renderTitle();
     case 'tipOk':
       S.profile = { ...S.profile, settings: { ...S.profile.settings, tipsSeen: { ...(S.profile.settings.tipsSeen || {}), [b.dataset.kind]: true } } };
       await store.save(S.profile);
@@ -992,8 +1011,9 @@ $('#settingsBtn').addEventListener('click', () => {
 
 (async function init() {
   S.profile = await store.load();
-  if (!S.profile.aiHabits) {
-    S.profile = { ...S.profile, aiHabits: assignHabits() };
+  const habits = assignHabits(S.profile.aiHabits || {});
+  if (JSON.stringify(habits) !== JSON.stringify(S.profile.aiHabits)) {
+    S.profile = { ...S.profile, aiHabits: habits };
     await store.save(S.profile);
   }
   S.info = bridge ? await bridge.info() : null;

@@ -428,8 +428,8 @@ export class Room extends DurableObject {
     const events = close(g);
     const verdicts = events.filter((e) => e.t === 'verdict').map((e) => ({ voter: e.voter, yes: e.yes }));
     const ex = events.find((e) => e.t === 'execute');
-    const sp = events.find((e) => e.t === 'spared');
-    this.broadcast({ t: 'verdict_result', day: g.day, target, verdicts, yes: (ex || sp).yes, no: (ex || sp).no, executed: ex ? { seat: ex.target, role: ex.role } : null });
+    const sp = events.find((e) => e.t === 'spared' || e.t === 'immune');
+    this.broadcast({ t: 'verdict_result', day: g.day, target, verdicts, yes: (ex || sp).yes, no: (ex || sp).no, executed: ex ? { seat: ex.target, role: ex.role } : null, immune: sp?.t === 'immune' });
     if (g.phase === 'over') return this.finishGame();
     this.openNight();
   }
@@ -453,7 +453,7 @@ export class Room extends DurableObject {
       if (ev.t === 'seerResult') this.send(this.pidOfSeat(ev.seer), { t: 'seer_result', target: ev.target, result: ev.result });
     }
     const night = events.find((e) => e.t === 'night');
-    this.broadcast({ t: 'night_result', day: night?.day, victim: night?.victim ? { seat: night.victim, role: night.role } : null, saved: !!night?.saved });
+    this.broadcast({ t: 'night_result', day: night?.day, victim: night?.victim ? { seat: night.victim, role: night.role } : null, saved: !!night?.saved, armored: night?.armored ?? null });
     if (g.phase === 'over') return this.finishGame();
     this.openStatement();
   }

@@ -148,13 +148,13 @@ test('rival habits: assigned per profile, observed literally, may change after b
       else act(g, p.action === 'sleep' ? {} : { target: rng.pick(p.targets) });
     }
     const rec = gameRecord(g);
-    assert.ok(rec.aiObs && Object.keys(rec.aiObs).length === CHARACTERS.length);
+    assert.ok(rec.aiObs && Object.keys(rec.aiObs).length === g.players.length - 1);
     games.push(rec);
   }
   // Notebook counts equal the stored observations.
   for (const c of CHARACTERS) {
     for (const row of notebookFor(games, c.id, 7)) {
-      const all = games.flatMap((g) => (g.aiObs[c.id].role === 'mafia' ? g.aiObs[c.id].obs : []).filter((o) => o.f === row.f));
+      const all = games.flatMap((g) => (g.aiObs[c.id]?.role === "mafia" ? g.aiObs[c.id].obs : []).filter((o) => o.f === row.f));
       assert.equal(row.mafia.n, all.length);
       assert.equal(row.mafia.k, all.filter((o) => o.v).length);
     }

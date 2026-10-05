@@ -89,3 +89,48 @@ test('a seer may claim without a result ("I am the real seer")', () => {
   assert.equal(st.intent, 'claim');
   assert.equal(st.target, null);
 });
+
+test('roles grow with the table like real mafia', async () => {
+  const { roleDeck } = await import('../src/core/engine.js');
+  const count = (deck, r) => deck.filter((x) => x === r).length;
+  assert.deepEqual([5, 7, 8, 9].map((n) => count(roleDeck(n), 'mafia')), [1, 2, 2, 3]);
+  assert.equal(count(roleDeck(7), 'soldier'), 0);
+  assert.equal(count(roleDeck(8), 'soldier'), 1);
+  assert.equal(count(roleDeck(9), 'politician'), 1);
+  for (const n of [5, 7, 9]) {
+    const g = createGame({ n: 1, seed: n, tableSize: n });
+    assert.equal(g.players.length, n);
+  }
+});
+
+test('a soldier survives one night attack and is revealed; a politician is never voted out', () => {
+  let armored = 0;
+  let immune = 0;
+  for (let s = 1; s < 400 && (!armored || !immune); s++) {
+    const g = createGame({ n: 1, seed: s, tableSize: 9, forceRole: 'villager' });
+    const rng = createRng(s);
+    let guard = 0;
+    while (g.pending && guard++ < 300) {
+      const p = g.pending;
+      if (p.type === 'spectate') act(g, { type: 'continue' });
+      else if (p.type === 'statement') act(g, { intent: 'pass' });
+      else if (p.type === 'vote') act(g, { type: 'vote', target: rng.pick(p.targets) });
+      else if (p.type === 'defense') act(g, { intent: 'deny' });
+      else if (p.type === 'verdict') act(g, { yes: true });
+      else act(g, p.action === 'sleep' ? {} : { target: rng.pick(p.targets) });
+    }
+    for (const e of g.events) {
+      if (e.t === 'night' && e.armored) {
+        armored++;
+        assert.equal(g.players.find((p) => p.id === e.armored).role, 'soldier');
+        assert.equal(g.revealed[e.armored], 'soldier');
+      }
+      if (e.t === 'immune') {
+        immune++;
+        assert.equal(g.players.find((p) => p.id === e.target).role, 'politician');
+      }
+      if (e.t === 'execute') assert.notEqual(e.role, 'politician');
+    }
+  }
+  assert.ok(armored > 0 && immune > 0, `armored ${armored} immune ${immune}`);
+});

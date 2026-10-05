@@ -264,3 +264,11 @@ table.reveal tr.human td:nth-child(2) { color: var(--accent); font-weight: 700; 
 .rivalry span { display: inline-flex; align-items: center; gap: 6px; }
 .rivalry img { width: 20px; height: 20px; }
 .toggle input[type='range'] { width: 140px; }
+
+/* table size + new roles */
+.table-picker { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; }
+.table-picker button { background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px; }
+.table-picker button.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.table-picker > div { width: 100%; text-align: center; }
+.role-tag.soldier, .role-tag.politician, .my-role.soldier, .my-role.politician { color: #7a5410; }
+.role-card.soldier .role-name, .role-card.politician .role-name { color: #7a5410; }
