@@ -272,3 +272,12 @@ table.reveal tr.human td:nth-child(2) { color: var(--accent); font-weight: 700; 
 .table-picker > div { width: 100%; text-align: center; }
 .role-tag.soldier, .role-tag.politician, .my-role.soldier, .my-role.politician { color: #7a5410; }
 .role-card.soldier .role-name, .role-card.politician .role-name { color: #7a5410; }
+.diag { margin-top: 8px; font-size: 12px; }
+.diag-step { margin: 3px 0; word-break: break-all; }
+.diag-step.bad, .diag.bad > b { color: var(--mafia); }
+.diag-step.ok, .diag.ok > b { color: var(--good); }
+.survey { display: grid; gap: 6px; margin: 12px 0; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; max-width: 640px; }
+.survey-q { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 14px; }
+.survey-q span { min-width: 260px; }
+.survey-q button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; }
+.survey-q button.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }

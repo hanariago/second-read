@@ -735,8 +735,12 @@ function renderReport() {
   updateBadges();
   const won = record.humanWon;
   const flips = record.flips;
+  // Only the rivals who sat at this table (all of them when browsing from the title).
+  const seated = Object.keys(roles || {});
   const rivals = report.rivals
-    .map((r, i) => {
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => !seated.length || Object.values(roles).every((x) => x === null) || seated.includes(r.id))
+    .map(({ r, i }) => {
       const remark = remarks?.[i]?.text;
       const rows = r.tells
         .map((t) => {
@@ -783,6 +787,7 @@ function renderReport() {
     </div>
     ${record.prediction ? (() => { const pt = predictionText(record.prediction); const st = { pending: '이번 판엔 판정 없음', hit: '적중당했다', broken: '깨뜨렸다' }[record.prediction.status]; return `<div class="pred-result ${record.prediction.status}"><img src="${portrait(record.prediction.rival)}" alt="" /><div><b>🎯 ${esc(pt.head)} — ${st}</b><div class="muted">“${esc(pt.body)}”</div></div></div>`; })() : ''}
     ${rivalryLine()}
+    ${surveyHtml(record)}
     <h2>AI가 본 당신 <span class="muted">라이벌들의 연구 노트 · ${report.gamesSeen}판 분량</span></h2>
     <div class="tally big"><span class="read">읽힘 ${t.caught}</span><span class="bluff">속임 ${t.bluffs}</span><span class="muted">이번 판 기억이 바꾼 투표 ${flips.length}표</span></div>
     ${flips.length ? '' : `<p class="muted">이번 판에는 기억 때문에 바뀐 투표가 없었습니다.</p>`}
@@ -809,6 +814,36 @@ function showLastReport() {
   renderReport();
 }
 
+// Two quick questions after a game (kept locally, exported only by the player).
+function surveyHtml(record) {
+  if (!S.profile.games.length || S.profile.games[S.profile.games.length - 1].n !== record.n) return '';
+  const s = record.survey || {};
+  const q = (key, label, opts) => `<div class="survey-q"><span>${label}</span>${opts.map(([v, t]) => `<button class="${s[key] === v ? 'on' : ''}" data-act="survey" data-q="${key}" data-v="${v}">${t}</button>`).join('')}</div>`;
+  return `<div class="survey">${q('read', '이번 판, 라이벌에게 읽혔다고 느꼈나요?', [['yes', '네'], ['bit', '조금'], ['no', '아니요']])}${q('again', '한 판 더 하고 싶나요?', [['yes', '네'], ['no', '아니요']])}</div>`;
+}
+
+function diagHtml(r) {
+  return `<div class="diag ${r.ok ? 'ok' : 'bad'}"><b>${r.ok ? '정상' : '문제 있음'}</b>${r.steps
+    .map((s) => `<div class="diag-step ${s.ok ? 'ok' : 'bad'}">${s.ok ? '✓' : '✕'} ${esc(s.name)} <span class="muted small">${s.ms}ms ${esc(JSON.stringify(s.detail ?? {}))}</span></div>`)
+    .join('')}<button class="link" data-act="copyDiag">결과 복사</button></div>`;
+}
+
+// Playtest export: per-game outcome, the player's own answers and the rivals' reads.
+function playtestExport() {
+  const games = S.profile.games.map((g) => ({
+    n: g.n,
+    role: g.role,
+    won: g.humanWon,
+    days: g.days,
+    memory: g.memory,
+    tellCitations: g.tellCitations,
+    flips: (g.flips || []).map((f) => f.kind),
+    prediction: g.prediction ? { rival: g.prediction.rival, f: g.prediction.f, status: g.prediction.status } : null,
+    survey: g.survey ?? null,
+  }));
+  return { app: S.info?.version ?? null, exportedAt: new Date().toISOString(), tableSize: S.profile.settings.tableSize ?? 7, games, rivalry: S.profile.rivalry ?? {}, tally: tallies(S.profile) };
+}
+
 // ---------- settings ----------
 
 async function openSettings() {
@@ -826,6 +861,7 @@ async function openSettings() {
         <div class="row"><button class="ghost" data-act="signOut">로그아웃</button><button class="ghost" data-act="signInNew">다른 계정 추가</button></div>`
         : `<p class="muted">로그인하지 않음</p>${chatgptButton()}`}
     </section>
+    ${a.signedIn ? `<section><h3>AI 연결 점검</h3><p class="muted small">로그인부터 실제 응답까지 한 번에 확인합니다(아주 짧은 요청 1회).</p><button class="ghost" data-act="diagnose">점검하기</button><div id="diagOut">${S.diag ? diagHtml(S.diag) : ''}</div></section>` : ''}
     ${a.planEnabled ? `<section><h3>모델</h3><select id="modelSelect"><option>불러오는 중…</option></select><p class="muted small">빠른 모델일수록 판 템포가 좋아집니다.</p></section>` : ''}
     <section><h3>소리</h3>
       <label class="toggle"><input type="checkbox" id="sfxToggle" ${S.profile.settings.sfx !== false ? 'checked' : ''}/> 효과음</label>
@@ -843,6 +879,8 @@ async function openSettings() {
       <p class="small">판 수 ${games.length} · 판당 평균 ${avg(games, 'durationMs') === '—' ? '—' : Math.round(avg(games, 'durationMs') / 1000) + '초'} · 판당 입력 ${avg(games, 'inputTokens')} / 출력 ${avg(games, 'outputTokens')} 토큰 · 판당 호출 ${avg(games, 'calls')}회</p>
       <p class="small">응답 ${calls.length}회 · 첫 토큰까지 평균 ${avg(calls, 'ttftMs')}ms · 완료까지 평균 ${avg(calls, 'totalMs')}ms</p>
       ${bridge ? `<button class="ghost" data-act="exportMetrics">측정 기록 내보내기</button>` : ''}
+      <button class="ghost" data-act="exportPlaytest">플레이테스트 기록 내보내기</button>
+      <p class="muted small">판 결과·설문·텔 통계만 담깁니다(계정·토큰 없음).</p>
     </section>
     <section><h3>정보</h3><p class="small">Second Read ${esc(S.info?.version || '')} · 오픈소스 (MIT)</p>${S.info ? `<button class="link" data-open="${S.info.repo}">소스 코드 보기</button>` : ''}</section>`;
   d.classList.remove('hidden');
@@ -973,6 +1011,33 @@ document.addEventListener('click', async (e) => {
       S.profile = { ...S.profile, style: null };
       await store.save(S.profile);
       return openSettings();
+    case 'diagnose': {
+      const out = $('#diagOut');
+      if (out) out.innerHTML = '<span class="muted">점검 중…</span>';
+      S.diag = await bridge.diagnose();
+      if ($('#diagOut')) $('#diagOut').innerHTML = diagHtml(S.diag);
+      return;
+    }
+    case 'copyDiag':
+      return navigator.clipboard?.writeText(JSON.stringify(S.diag, null, 2));
+    case 'exportPlaytest': {
+      const blob = new Blob([JSON.stringify(playtestExport(), null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `second-read-playtest-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      return;
+    }
+    case 'survey': {
+      const games = S.profile.games.slice();
+      const last = { ...games[games.length - 1] };
+      last.survey = { ...(last.survey || {}), [b.dataset.q]: b.dataset.v };
+      games[games.length - 1] = last;
+      S.profile = { ...S.profile, games };
+      await store.save(S.profile);
+      if (S.lastReport) S.lastReport.record = last;
+      return renderReport();
+    }
     case 'exportMetrics':
       return bridge?.metricsExport();
   }

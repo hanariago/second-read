@@ -16,6 +16,8 @@ export async function run(win, dir, app) {
     await wait(800);
     log('bridge present:', await js('!!window.secondRead'));
     log('auth status:', JSON.stringify(await js('window.secondRead.authStatus()')));
+    const diag = await js('window.secondRead.diagnose()');
+    log('diagnose (signed out):', diag.ok, diag.steps.map((s) => `${s.name}:${s.ok ? 'ok' : s.detail?.code}`).join(', '));
     await shot('a-title');
     await click('#settingsBtn');
     await wait(500);

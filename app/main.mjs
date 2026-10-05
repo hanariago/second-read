@@ -126,6 +126,66 @@ async function complete(id, req) {
   }
 }
 
+// "AI 연결 점검": one tiny real request through the whole path, so a first
+// login can be verified in seconds. The report never contains tokens.
+async function diagnose() {
+  const steps = [];
+  const step = async (name, fn) => {
+    const t0 = Date.now();
+    try {
+      const detail = await fn();
+      steps.push({ name, ok: true, ms: Date.now() - t0, detail });
+      return detail;
+    } catch (e) {
+      steps.push({ name, ok: false, ms: Date.now() - t0, detail: { code: e.code || e.name, status: e.status ?? null, message: String(e.message || '').slice(0, 200), requestId: e.requestId ?? null } });
+      return null;
+    }
+  };
+  const status = await step('로그인 상태', async () => {
+    const s = await auth.status();
+    if (!s.signedIn) throw Object.assign(new Error('로그인되어 있지 않습니다'), { code: 'signed_out' });
+    if (!s.planEnabled) throw Object.assign(new Error('ChatGPT 플랜 사용 권한이 없습니다'), { code: 'plan_not_enabled' });
+    return { planEnabled: true };
+  });
+  let token = null;
+  // The token itself never goes into the report.
+  if (status) {
+    await step('토큰 갱신', async () => {
+      token = await auth.accessToken({ force: true });
+      return { refreshed: true };
+    });
+  }
+  let model = null;
+  if (token) {
+    const models = await step('모델 목록', async () => {
+      const list = await listModels(token);
+      return { count: list.length, first: list.slice(0, 5).map((m) => m.slug) };
+    });
+    if (models) model = await step('사용할 모델', async () => ({ slug: await resolveModel(token) }));
+  }
+  if (model) {
+    await step('응답 생성 (스트리밍)', async () => {
+      const r = await complete('diagnose', {
+        instructions: 'Reply with JSON only.',
+        input: [{ role: 'user', content: '{"speakers":[{"speaker_id":"leon","intent":"pass"}]}' }],
+        schema: { type: 'json_schema', name: 'rival_lines', strict: true, schema: { type: 'object', additionalProperties: false, required: ['lines'], properties: { lines: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['speaker_id', 'text', 'evidence_ids'], properties: { speaker_id: { type: 'string' }, text: { type: 'string' }, evidence_ids: { type: 'array', items: { type: 'string' } } } } } } } },
+      });
+      if (!r.ok) throw Object.assign(new Error(r.error?.message || r.error?.code), { code: r.error?.code });
+      let parsed = false;
+      try {
+        parsed = Array.isArray(JSON.parse(r.text).lines);
+      } catch {
+        /* not JSON */
+      }
+      const s = await settings();
+      return { model: r.model, ttftMs: r.ttftMs, totalMs: r.totalMs, usage: r.usage, jsonOk: parsed, reasoningStep: s.effortStep?.[model.slug] ?? 0, droppedFields: s.dropped?.[model.slug] ?? [] };
+    });
+  }
+  const report = { at: new Date().toISOString(), app: app.getVersion(), platform: process.platform, ok: steps.every((s) => s.ok), steps };
+  await writeJsonAtomic(path.join(userDir(), 'diagnostics.json'), report);
+  return report;
+}
+
 function registerIpc() {
   const h = (ch, fn) => ipcMain.handle(ch, (_e, ...args) => fn(...args));
   h('auth:status', () => auth.status());
@@ -155,6 +215,7 @@ function registerIpc() {
     }
   });
   h('ai:setModel', (slug) => patchSettings({ model: slug }));
+  h('ai:diagnose', () => diagnose());
   h('ai:complete', (id, req) => complete(id, req));
   h('ai:abort', (id) => inflight.get(id)?.abort());
 

@@ -463,8 +463,9 @@ function decideAIStatements(g) {
       const back = accusedMe[0];
       if (isAlive(g, back) && g.rng.next() < 0.5) st = { ...st, intent: 'accuse', target: back, reason: { kind: 'accused_me', subject: back, other: cid } };
       else st = { ...st, intent: 'deny', target: null };
-    } else if (r > 1) {
-      // Later rounds are for answering; nobody repeats themselves for the sake of it.
+    } else if (r > 1 && g.mode === 'single') {
+      // Single: later rounds are for answering; nobody repeats themselves for the sake of it.
+      // (Rooms keep normal chatter so people don't stand out by being the only ones talking.)
       st = { ...st, intent: 'skip' };
     } else if (me.role === 'mafia') {
       const fs = frameScores(g, cid);

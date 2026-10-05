@@ -1,0 +1,93 @@
+name: ci
+
+# Tests on every push; on tags (v*) or manual runs, builds mac + Windows and
+# smoke-tests the real app on each OS. Signing/notarization switch on only
+# when the matching secrets exist, so unsigned builds keep working meanwhile.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Solvability and balance gate
+        run: |
+          node sim/deduce.mjs 300 | tee deduce.txt
+          node -e "const t=require('fs').readFileSync('deduce.txt','utf8');const m=t.match(/gap ([\d.]+) pts/);if(!m||+m[1]<10){console.error('deduction gap below 10 pts');process.exit(1)}"
+      - name: Multiplayer relay end-to-end
+        run: node test/multi.e2e.mjs
+
+  app:
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Self-check the real app (main process, bridge, OAuth listener)
+        shell: bash
+        run: |
+          mkdir -p selfcheck
+          SECOND_READ_SELFCHECK="$PWD/selfcheck" npx electron . 2>&1 | tee selfcheck.log
+          grep -q "bridge present: true" selfcheck.log
+          grep -q "profile.json written: true 1 game" selfcheck.log
+          grep -q "callback listener status: 200" selfcheck.log
+      - name: Build (mac)
+        if: runner.os == 'macOS'
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          if [ -n "$CSC_LINK" ]; then
+            npx electron-builder --mac -c.mac.identity=null -c.mac.hardenedRuntime=true -c.mac.notarize=true --publish never
+          else
+            npx electron-builder --mac --publish never
+          fi
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        env:
+          CSC_LINK: ${{ secrets.WIN_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
+        shell: bash
+        run: npx electron-builder --win --publish never
+      - name: Smoke-launch the packaged Windows app
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Recurse dist\win-unpacked -Filter "Second Read.exe" | Select-Object -First 1
+          $p = Start-Process -FilePath $exe.FullName -PassThru
+          Start-Sleep -Seconds 12
+          if ($p.HasExited) { Write-Error "app exited early with code $($p.ExitCode)"; exit 1 }
+          Stop-Process -Id $p.Id -Force
+          Write-Host "packaged app stayed up"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: second-read-${{ matrix.os }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.exe
+          if-no-files-found: ignore

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('secondRead', {
   planWelcomeShown: inv('auth:planWelcomeShown'),
   models: inv('ai:models'),
   setModel: inv('ai:setModel'),
+  diagnose: inv('ai:diagnose'),
   complete: inv('ai:complete'),
   abort: inv('ai:abort'),
   profileLoad: inv('profile:load'),
