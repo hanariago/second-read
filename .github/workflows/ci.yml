@@ -29,7 +29,8 @@ jobs:
         run: node test/multi.e2e.mjs
 
   app:
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    # Builds run on the public repo only (free minutes); the private mirror runs tests.
+    if: github.repository == 'hanariago/second-read' && (startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch')
     needs: test
     strategy:
       fail-fast: false
