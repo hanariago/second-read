@@ -237,7 +237,8 @@ function claimers(g) {
 // player they called mafia turns out to be town.
 function exposedClaimer(g, c) {
   const realSeerDead = g.deaths.find((x) => x.role === 'seer');
-  if (realSeerDead && realSeerDead.id !== c && claimers(g).includes(realSeerDead.id)) return { kind: 'fake_claimer', other: realSeerDead.id };
+  // Roles are shown on death, so a revealed real seer exposes every other claimer.
+  if (realSeerDead && realSeerDead.id !== c) return { kind: 'fake_claimer', other: realSeerDead.id };
   for (const cl of claimsBy(g, c)) {
     const dead = g.deaths.find((x) => x.id === cl.target);
     if (dead && cl.result === 'mafia' && dead.role !== 'mafia') return { kind: 'claim_contradicted', other: cl.target };

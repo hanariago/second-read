@@ -16,8 +16,6 @@
 - **나도 라이벌을 읽는다**: 라이벌에게도 버릇이 있고, 결과 화면의 노트에 쌓입니다. 들키면 라이벌도 버릇을 바꿉니다.
 - 최후 변론, 의사·예언자, 친구와 하는 멀티(누가 사람인지 모르게)까지.
 
-스크린샷: `docs/screenshots/` 의 1~6번 이미지를 올리세요.
-
 ### ChatGPT로 로그인
 
 게임을 열고 **Continue with ChatGPT**를 누르면 브라우저에서 ChatGPT 로그인이 열립니다. 허용하면 라이벌 대사가 **본인 ChatGPT 플랜 사용량**으로 생성됩니다(API 키 불필요). 판당 AI 호출은 최대 4회입니다. 사용량과 이 앱의 한도는 [ChatGPT 설정 → Usage](https://chatgpt.com/settings/usage)에서 관리할 수 있습니다.
@@ -44,6 +42,7 @@
 ## 업로드 설정 메모 (페이지에 넣지 않음)
 
 - 페이지 종류: Downloadable (브라우저 플레이 아님)
+- 스크린샷: `docs/screenshots/` 의 1~6번 이미지
 - `SecondRead-<버전>-mac-universal.dmg` → **macOS** 표시
 - `SecondRead-<버전>-win-x64.zip` 와 `SecondRead-<버전>-win-x64.exe`(설치형) → **Windows** 표시
 - 파일은 GitHub Releases에서 받을 수 있음: https://github.com/hanariago/second-read/releases

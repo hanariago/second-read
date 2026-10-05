@@ -224,7 +224,7 @@ export class Room extends DurableObject {
       if (s.intent === 'skip') continue;
       // In a mixed room, rivals only cite what everyone saw in this game;
       // memory still steers their votes and shows up in the end-of-game report.
-      const spec = { speaker: s.speaker, intent: s.intent, target: s.target, result: s.result, day: s.day, evidence: (s.evidence || []).filter((e) => e.kind === 'now') };
+      const spec = { speaker: s.speaker, intent: s.intent, target: s.target, result: s.result, day: s.day, reason: s.reason, evidence: (s.evidence || []).filter((e) => e.kind === 'now') };
       const owner = this.owners[s.speaker];
       if (owner && this.clients.has(owner)) {
         if (!byOwner.has(owner)) byOwner.set(owner, []);
@@ -363,7 +363,7 @@ export class Room extends DurableObject {
     this.round = { kind: 'defense', day: g.day, round: g.rounds + 1, lines: {}, waiting: new Set(), fromTemplate: new Set(), specs: {}, humansDoneAt: null, closed: false };
     if (g.defensePlan) {
       const s = g.defensePlan;
-      const spec = { speaker: s.speaker, intent: s.intent, target: s.target, result: s.result, day: s.day, evidence: [] };
+      const spec = { speaker: s.speaker, intent: s.intent, target: s.target, result: s.result, day: s.day, reason: s.reason, evidence: [] };
       this.round.specs[s.speaker] = spec;
       const owner = this.owners[s.speaker];
       if (owner && this.clients.has(owner)) {
