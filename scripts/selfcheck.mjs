@@ -24,9 +24,10 @@ export async function run(win, dir, app) {
     await click('[data-act="offline"]');
     await wait(300);
     await click('[data-act="closeModal"]');
-    for (let i = 0; i < 40 && !(await has('.report')); i++) {
+    for (let i = 0; i < 160 && !(await has('.report')); i++) {
       await wait(300);
-      if (await has('[data-act="say-pass"]')) await click('[data-act="say-pass"]');
+      if (await has('[data-act="verdict-yes"]')) await click('[data-act="verdict-yes"]');
+      else if (await has('[data-act="say-pass"]')) await click('[data-act="say-pass"]');
       else if (await has('[data-act="vote"]')) await click('[data-act="vote"]');
       else if (await has('[data-act="night"]')) await click('[data-act="night"]');
       else if (await has('[data-act="sleep"]')) await click('[data-act="sleep"]');
