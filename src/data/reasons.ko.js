@@ -26,6 +26,8 @@ export const REASON_TEXT = {
   own_check_town: '내가 직접 확인했는데 {t}는 시민',
   i_am_seer: '진짜 예언자는 나라서, 예언자를 자처한 {t}는 거짓말',
   revealed_soldier: '{t}는 밤 공격을 버텨낸 군인',
+  revealed_mafia: '기자의 특종으로 {t}가 마피아로 드러났음',
+  revealed_town: '기자의 특종으로 {t}의 정체가 시민 편으로 드러났음',
   revealed_politician: '{t}는 투표로 처형되지 않는 정치인',
 };
 

@@ -8,9 +8,9 @@ import { CHARACTERS } from '../../src/core/characters.js';
 import { templateLine, humanLine } from '../../src/ai/templates.js';
 import { sceneSummary, todayChat } from '../../src/ai/prompts.js';
 
-const NICKS = ['고등어', '새벽세시', '감자칩', '민트초코', '레몬즙', '곰돌이', '택배왔어요', '슬리퍼', '구름빵', '호박죽', '두부', '라면왕', '달팽이', '소금빵', '오리발', '펭귄', '귤껍질', '양말한짝'];
+const NICKS = ['밤산책', '우산', '참깨', '고양이손', '박하사탕', '자두', '고등어', '새벽세시', '감자칩', '민트초코', '레몬즙', '곰돌이', '택배왔어요', '슬리퍼', '구름빵', '호박죽', '두부', '라면왕', '달팽이', '소금빵', '오리발', '펭귄', '귤껍질', '양말한짝'];
 const DEFAULT_TIMERS = { round: 75000, grace: 8000, vote: 30000, defense: 40000, verdict: 20000, night: 25000, nightIdle: 1500 };
-const MAX_HUMANS = 4;
+const MAX_HUMANS = 6;
 const MAX_MSG = 64 * 1024;
 
 const shuffle = (arr) => {
@@ -453,7 +453,8 @@ export class Room extends DurableObject {
       if (ev.t === 'seerResult') this.send(this.pidOfSeat(ev.seer), { t: 'seer_result', target: ev.target, result: ev.result });
     }
     const night = events.find((e) => e.t === 'night');
-    this.broadcast({ t: 'night_result', day: night?.day, victim: night?.victim ? { seat: night.victim, role: night.role } : null, saved: !!night?.saved, armored: night?.armored ?? null });
+    const report = events.find((e) => e.t === 'report');
+    this.broadcast({ t: 'night_result', day: night?.day, victim: night?.victim ? { seat: night.victim, role: night.role } : null, saved: !!night?.saved, armored: night?.armored ?? null, report: report ? { seat: report.target, role: report.role } : null });
     if (g.phase === 'over') return this.finishGame();
     this.openStatement();
   }

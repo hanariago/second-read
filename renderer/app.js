@@ -266,6 +266,7 @@ function newGame() {
   const partners = mafiaTeam(S.game, HUMAN_ID);
   const mafiaN = S.game.players.filter((p) => p.role === 'mafia').length;
   const goal = {
+    reporter: `판마다 한 번, 밤에 한 명을 골라 다음 날 아침 정체를 공개합니다. 마피아 ${mafiaN}명을 찾아내세요.`,
     mafia: partners.length ? `동료 ${partners.map((x) => displayName(x)).join(', ')}와 함께 들키지 않고 살아남으세요. 밤마다 한 명을 제거합니다.` : '혼자 들키지 않고 살아남으세요. 밤마다 한 명을 제거합니다.',
     seer: `밤마다 한 명의 정체를 조사합니다. 마피아 ${mafiaN}명을 투표로 처형하세요.`,
     doctor: `밤마다 한 명을 지킵니다(자신도 가능). 마피아 ${mafiaN}명을 찾아내세요.`,
@@ -406,7 +407,7 @@ function renderGame() {
   $('#screen').innerHTML = `
   <section class="game">
     <div class="game-head"><span>${g.n}판</span><span id="phaseLabel"></span><span class="my-role ${g.humanRole}">당신: ${ROLE_KO[g.humanRole]}</span>${g.memory ? '' : '<span class="off">기억 꺼짐</span>'}<span id="predChip"></span></div>
-    <div class="seats" id="seats">${seatsHtml()}</div>
+    <div class="seats ${g.players.length > 9 ? 'dense' : ''}" id="seats">${seatsHtml()}</div>
     <div class="feed" id="feed">${S.feed.map(feedItemHtml).join('')}</div>
     <div class="actions" id="actions"></div>
   </section>`;
@@ -538,6 +539,7 @@ function renderActions() {
     if (p.action === 'kill') el.innerHTML = `<div class="act-title">밤 · 제거할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else if (p.action === 'check') el.innerHTML = `<div class="act-title">밤 · 정체를 조사할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else if (p.action === 'protect') el.innerHTML = `<div class="act-title">밤 · 오늘 밤 지킬 사람을 고르세요 <span class="muted">(자신도 가능)</span></div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
+    else if (p.action === 'report') el.innerHTML = `<div class="act-title">밤 · 기자: 내일 아침 정체를 공개할 사람 <span class="muted">(판마다 한 번)</span></div><div class="act-row">${targetButtons(p.targets, 'night')}<button class="ghost" data-act="sleep">이번엔 아껴 둔다</button></div>`;
     else el.innerHTML = `<div class="act-title">밤 · 시민은 잠듭니다</div><div class="act-row"><button class="primary" data-act="sleep">잠들기</button></div>`;
     el.innerHTML = tipHtml('night') + el.innerHTML;
   } else if (p.type === 'spectate') {
@@ -644,6 +646,10 @@ async function processEvents(events) {
       const no = batch.filter((v) => !v.yes).map((v) => displayName(v.voter));
       pushFeed({ kind: 'system', text: `처형 찬성: ${yes.join(', ') || '없음'} / 반대: ${no.join(', ') || '없음'}` });
       await sleep(500);
+    } else if (ev.t === 'report') {
+      pushFeed({ kind: 'alert', text: `📰 기자의 특종: ${withName('{t}는', ev.target)} ${ROLE_KO[ev.role]}입니다.` });
+      sound.play('trial');
+      refreshSeats();
     } else if (ev.t === 'immune') {
       pushFeed({ kind: 'alert', text: `찬성 ${ev.yes} : 반대 ${ev.no} — 그러나 ${withName('{t}는', ev.target)} 정치인이라 투표로 처형되지 않습니다.` });
       refreshSeats();

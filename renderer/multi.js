@@ -32,7 +32,7 @@ export function setupMulti(ctx) {
     $('#screen').innerHTML = `
     <section class="title lobby">
       <h1>친구와 하기</h1>
-      <p class="tagline">사람 최대 4명 + AI 4명. 모두 무작위 닉네임으로 섞입니다.<br/>매 라운드 각자 쓰고, 다 같이 공개. 누가 사람인지 맞혀보세요.</p>
+      <p class="tagline">사람 최대 6명 + AI 4명 이상. 모두 무작위 닉네임으로 섞입니다.<br/>매 라운드 각자 쓰고, 다 같이 공개. 누가 사람인지 맞혀보세요.</p>
       ${msg ? `<p class="warn">${esc(msg)}</p>` : ''}
       ${
         inRoom
@@ -126,7 +126,7 @@ export function setupMulti(ctx) {
       M.host = M.players.some((p) => p.host) && M.host;
       if (!M.phase || M.phase === 'lobby') renderLobby();
     } else if (m.t === 'error') {
-      const text = { full: '방이 가득 찼어요 (최대 4명).', in_progress: '이미 게임이 진행 중이에요.', not_host: '방장만 시작할 수 있어요.' }[m.code] || m.message || m.code;
+      const text = { full: '방이 가득 찼어요 (최대 6명).', in_progress: '이미 게임이 진행 중이에요.', not_host: '방장만 시작할 수 있어요.' }[m.code] || m.message || m.code;
       if (m.code === 'full' || m.code === 'in_progress') leave(false);
       renderLobby(text);
     } else if (m.t === 'started') startGame(m);
@@ -175,6 +175,7 @@ export function setupMulti(ctx) {
         pushFeed({ kind: 'sys', text: `밤사이 ${nameOf(m.victim.seat)} 쓰러짐. 정체: ${ROLE_KO[m.victim.role]}` });
       } else if (m.armored) pushFeed({ kind: 'sys', text: `밤사이 ${nameOf(m.armored)}가 습격을 버텨냄. 군인이었다.` });
       else pushFeed({ kind: 'sys', text: m.saved ? '조용한 밤. 누군가 의사 덕에 살았다.' : '조용한 밤.' });
+      if (m.report) pushFeed({ kind: 'sys', text: `📰 기자의 특종: ${nameOf(m.report.seat)}는 ${ROLE_KO[m.report.role]}.` });
       renderSeats();
     } else if (m.t === 'over') finishGame(m);
   }
@@ -298,7 +299,7 @@ export function setupMulti(ctx) {
       el.innerHTML = `<div class="act-title">처형 투표</div><div class="act-row">${targetBtns(o.targets, 'mVote')}</div>`;
     } else if (o.type === 'night') {
       if (o.action === 'sleep') el.innerHTML = `<div class="act-title muted">밤입니다. 잠드는 중…</div>`;
-      else el.innerHTML = `<div class="act-title">${{ kill: '제거할 사람', check: '조사할 사람', protect: '오늘 밤 지킬 사람 (자신도 가능)' }[o.action]}</div><div class="act-row">${targetBtns(o.targets, 'mNight')}</div>`;
+      else el.innerHTML = `<div class="act-title">${{ kill: '제거할 사람', check: '조사할 사람', protect: '오늘 밤 지킬 사람 (자신도 가능)', report: '기자: 내일 정체를 공개할 사람 (판마다 한 번)' }[o.action]}</div><div class="act-row">${targetBtns(o.targets, 'mNight')}${o.optional ? `<button class="ghost" data-act="mNightSkip">아껴 둔다</button>` : ''}</div>`;
     }
   }
 
@@ -397,6 +398,8 @@ export function setupMulti(ctx) {
         return send({ t: 'vote', target: b.dataset.target });
       case 'mNight':
         return send({ t: 'night', target: b.dataset.target });
+      case 'mNightSkip':
+        return send({ t: 'night', target: null });
       case 'mReport': {
         const m = M.last;
         const roles = Object.fromEntries(m.reveal.filter((r) => !r.human).map((r) => [r.seat, r.role]));

@@ -20,6 +20,10 @@ app.whenReady().then(async () => {
   const has = (sel) => js(`!!document.querySelector(${JSON.stringify(sel)})`);
   const click = (sel) => js(`(() => { const b = document.querySelector(${JSON.stringify(sel)}); if (b) { b.click(); return true; } return false; })()`);
   await wait(500);
+  if (process.env.TABLE) {
+    await click(`[data-act="tableSize"][data-n="${process.env.TABLE}"]`);
+    await wait(300);
+  }
   await shot('01-title');
   // Scripted habit: as mafia accuse + vote first; as town pass + wait.
   const games = +(process.argv[3] || 4);

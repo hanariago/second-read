@@ -134,6 +134,46 @@ V.hajun = {
   deny: ['나 아냐. 괜히 헛심 쓰지 마.'],
 };
 
+V.yuri = {
+  accuse: ['{t} 씨, 말과 태도가 조금 어긋나요.', '{t} 씨 반응이 흥미롭네요. 의심스러워요.'],
+  defend: ['{t} 씨는 일관돼 보여요.', '{t} 씨를 몰아가는 건 성급해요.'],
+  pass: ['조금 더 관찰할게요.', '아직은 판단하기 이르네요.'],
+  claimMafia: ['제가 예언자예요. {t} 씨, 마피아로 나왔어요.'],
+  claimTown: ['제가 예언자예요. {t} 씨는 시민이었어요.'],
+  claimBare: ['예언자는 저예요. 그 주장은 믿기 어렵네요.'],
+  memory: ['{ev}. 패턴이 꽤 분명해요.', '{ev}. 흥미로운 일관성이네요.'],
+  clear: ['{ev}. 시민일 때와 같은 반응이에요.'],
+  asideSuspect: ['{ev}. 메모해 둘게요.'],
+  asideClear: ['{ev}. 이번엔 다르네요.'],
+  deny: ['저는 아니에요. 제 반응을 다시 보세요.'],
+};
+V.taeo = {
+  accuse: ['{t}, 냄새가 나. 탄내야.', '{t} 너 수상해. 불 맞을 준비 해.'],
+  defend: ['{t}는 놔둬. 아직 덜 익었어.', '{t} 말고 다른 놈 보자.'],
+  pass: ['아직 간 보는 중이야.', '불 조절 좀 하자고.'],
+  claimMafia: ['나 예언자다. {t}, 마피아야.'],
+  claimTown: ['나 예언자다. {t}는 시민이고.'],
+  claimBare: ['예언자는 나야. 저건 가짜 재료고.'],
+  memory: ['{ev}. 매번 같은 레시피네.', '{ev}. 손맛은 안 변하지.'],
+  clear: ['{ev}. 시민 때 그 맛이네.'],
+  asideSuspect: ['{ev}. 어디서 탄내가 나는데?'],
+  asideClear: ['{ev}. 이번엔 간이 다르네.'],
+  deny: ['나? 웃기지 마. 난 아냐.'],
+};
+V.gaeun = {
+  accuse: ['{t}, 이거 반전 각인데? 수상해!', '{t} 캐릭터 설정이 좀 이상해.'],
+  defend: ['{t}는 그냥 조연 같아~', '{t}는 아냐, 너무 뻔하잖아.'],
+  pass: ['음~ 아직 떡밥이 부족해.', '다음 화까지 지켜볼래.'],
+  claimMafia: ['나 예언자야! {t}, 마피아로 나왔어!'],
+  claimTown: ['나 예언자야. {t}는 시민이었어.'],
+  claimBare: ['잠깐, 진짜 예언자는 나야!'],
+  memory: ['{ev}. 이 떡밥 전에도 봤어!', '{ev}. 복선 회수 완료~'],
+  clear: ['{ev}. 시민일 때 전개랑 똑같네.'],
+  asideSuspect: ['{ev}. 오, 복선이다.'],
+  asideClear: ['{ev}. 전개가 바뀌었네?'],
+  deny: ['나 아냐! 그건 너무 뻔한 전개야!'],
+};
+
 // Multiplayer: rivals must read like people in a group chat, so the fallback
 // lines are short, casual and identical in tone for every seat.
 const CASUAL = {
@@ -159,6 +199,9 @@ function casualLine(spec, s, nameOf) {
 }
 
 const REMARK_EMPTY = {
+  yuri: '아직 관찰이 더 필요해요. 다음 판에 봬요.',
+  taeo: '아직 간을 다 못 봤어. 다음 판에 보자.',
+  gaeun: '다음 화에서 반전 기대할게~',
   doyun: '아직 판단할 근거가 부족합니다. 다음 판에 보죠.',
   hajun: '아직 잘 모르겠네. 다음에 또 보자고.',
   kai: '아직 너 분석 덜 됐다~ 다음 판 기대해!',

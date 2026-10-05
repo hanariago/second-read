@@ -93,14 +93,40 @@ test('a seer may claim without a result ("I am the real seer")', () => {
 test('roles grow with the table like real mafia', async () => {
   const { roleDeck } = await import('../src/core/engine.js');
   const count = (deck, r) => deck.filter((x) => x === r).length;
-  assert.deepEqual([5, 7, 8, 9].map((n) => count(roleDeck(n), 'mafia')), [1, 2, 2, 3]);
-  assert.equal(count(roleDeck(7), 'soldier'), 0);
-  assert.equal(count(roleDeck(8), 'soldier'), 1);
+  assert.deepEqual([5, 6, 7, 8, 9, 10, 11, 12].map((n) => count(roleDeck(n), 'mafia')), [1, 1, 2, 2, 3, 3, 4, 4]);
+  assert.equal(count(roleDeck(9), 'soldier'), 1);
   assert.equal(count(roleDeck(9), 'politician'), 1);
-  for (const n of [5, 7, 9]) {
+  for (const n of [10, 11, 12]) assert.equal(count(roleDeck(n), 'reporter'), 1);
+  for (const n of [5, 6, 7, 8, 9, 10, 11, 12]) {
+    assert.equal(roleDeck(n).length, n);
     const g = createGame({ n: 1, seed: n, tableSize: n });
     assert.equal(g.players.length, n);
   }
+});
+
+test('the reporter publishes one role once, and only from a living reporter', () => {
+  let stories = 0;
+  for (let s = 1; s < 200; s++) {
+    const g = createGame({ n: 1, seed: s, tableSize: 10, forceRole: 'villager' });
+    const rng = createRng(s);
+    let guard = 0;
+    while (g.pending && guard++ < 300) {
+      const p = g.pending;
+      if (p.type === 'spectate') act(g, { type: 'continue' });
+      else if (p.type === 'statement') act(g, { intent: 'pass' });
+      else if (p.type === 'vote') act(g, { type: 'vote', target: rng.pick(p.targets) });
+      else if (p.type === 'defense') act(g, { intent: 'deny' });
+      else if (p.type === 'verdict') act(g, { yes: true });
+      else act(g, p.action === 'sleep' ? {} : { target: rng.pick(p.targets) });
+    }
+    const reports = g.events.filter((e) => e.t === 'report');
+    assert.ok(reports.length <= 1);
+    for (const r of reports) {
+      stories++;
+      assert.equal(g.revealed[r.target], g.players.find((p) => p.id === r.target).role);
+    }
+  }
+  assert.ok(stories > 10, `stories ${stories}`);
 });
 
 test('a soldier survives one night attack and is revealed; a politician is never voted out', () => {

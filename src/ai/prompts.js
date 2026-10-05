@@ -56,6 +56,9 @@ const CASUAL_HINTS = {
   noa: '부드럽고 걱정하는 말투, 존댓말 섞음',
   doyun: '따지는 말투, 논리적, 존댓말',
   hajun: '말수 적고 툭툭, 반말',
+  yuri: '차분하고 분석적, 존댓말 섞음',
+  taeo: '거칠고 직설적, 반말',
+  gaeun: '밝고 엉뚱, 반말, 비유',
 };
 
 export function sceneSummary(g, nameOf = displayName) {

@@ -171,17 +171,17 @@ try {
     check(clients[0].over && clients[2].over, 'leave: remaining players finish the game');
   }
 
-  // 4) Fifth player is refused.
+  // 4) Seventh player is refused.
   {
     const { code } = await (await fetch(`${BASE}/room`, { method: 'POST' })).json();
-    const cs = [1, 2, 3, 4, 5].map((i) => makeClient(code, `Q${i}`, {}));
+    const cs = [1, 2, 3, 4, 5, 6, 7].map((i) => makeClient(code, `Q${i}`, {}));
     await Promise.all(cs.map((c) => c.ready));
     for (const c of cs) {
       c.send({ t: 'hello', name: c.name, canRender: false, n: 1, records: [] });
       await wait(80);
     }
     await wait(300);
-    check(cs[4].log.some((m) => m.t === 'error' && m.code === 'full'), 'room: a fifth human is refused');
+    check(cs[6].log.some((m) => m.t === 'error' && m.code === 'full'), 'room: a seventh human is refused');
     cs.forEach((c) => c.ws.close());
   }
 } catch (e) {

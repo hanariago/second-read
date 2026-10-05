@@ -16,10 +16,10 @@ import { HABITS } from './notebook.js';
 // Habits a rival can predict before a game: always observed on day 1.
 export const PREDICTABLE_FEATURES = ['stance_accuse', 'stance_pass', 'vote_first'];
 
-export const ROLE_KO = { mafia: '마피아', seer: '예언자', doctor: '의사', soldier: '군인', politician: '정치인', villager: '시민' };
-export const TABLE_SIZES = [5, 7, 9];
+export const ROLE_KO = { mafia: '마피아', seer: '예언자', doctor: '의사', soldier: '군인', politician: '정치인', reporter: '기자', villager: '시민' };
+export const TABLE_SIZES = [5, 6, 7, 8, 9, 10, 11, 12];
 
-const HERD = { leon: 0.2, mio: 0.4, bruno: -0.1, sera: 0.15, kai: 0.5, noa: 0.1, doyun: 0.0, hajun: 0.25 };
+const HERD = { leon: 0.2, mio: 0.4, bruno: -0.1, sera: 0.15, kai: 0.5, noa: 0.1, doyun: 0.0, hajun: 0.25, yuri: 0.1, taeo: 0.3, gaeun: 0.35 };
 const EVIDENCE_THRESHOLD = 0.35; // |tell term| needed before a rival cites memory
 export const AI_SKIP_RATE = 0.2;
 export const MAX_DAYS = 4; // if the town hasn't caught everyone by then, the mafia wins // multi: humans skip rounds, so rivals sometimes do too
@@ -48,16 +48,31 @@ export function roleForGame(n, pastGames, rng, seatCount = 7) {
 // Roles grow with the table, like real mafia:
 //   5-6: 1 mafia, seer, doctor   7: 2 mafia (who know each other), seer, doctor
 //   8: + soldier (survives one night attack)   9: 3 mafia, + politician (can't be voted out)
-// Rooms fill to 7 seats (8 with four people); at least 4 rivals so people can hide among them.
+//   10-11: + reporter (once a game, publishes one player's role)   12: 4 mafia
+// Rooms: 7 seats up to 3 people, then about two seats per person (8, 10, 12),
+// always at least 4 rivals so people can hide among them.
 export function aiCountFor(humans) {
-  return Math.max(4, Math.min(CHARACTERS.length, 7 - humans));
+  const seats = humans <= 3 ? 7 : Math.min(12, humans * 2);
+  return Math.max(4, Math.min(CHARACTERS.length, seats - humans));
 }
 
+// Roles per table size (special roles appear as the table grows), tuned with
+// sim/deduce.mjs so careful play matters and neither side runs away with it.
+export const DECKS = {
+  5: { mafia: 1, roles: ['seer', 'doctor'] },
+  6: { mafia: 1, roles: ['seer'] },
+  7: { mafia: 2, roles: ['seer', 'doctor'] },
+  8: { mafia: 2, roles: ['seer', 'doctor'] },
+  9: { mafia: 3, roles: ['seer', 'doctor', 'soldier', 'politician'] },
+  10: { mafia: 3, roles: ['seer', 'doctor', 'reporter'] },
+  11: { mafia: 4, roles: ['seer', 'doctor', 'reporter'] },
+  12: { mafia: 4, roles: ['seer', 'doctor', 'politician', 'reporter'] },
+};
+
 export function roleDeck(seatCount) {
-  const deck = [...Array(seatCount >= 9 ? 3 : seatCount >= 7 ? 2 : 1).fill('mafia'), 'seer'];
-  if (seatCount >= 5) deck.push('doctor');
-  if (seatCount >= 8) deck.push('soldier');
-  if (seatCount >= 9) deck.push('politician');
+  const n = Math.max(5, Math.min(12, seatCount));
+  const d = DECKS[n];
+  const deck = [...Array(d.mafia).fill('mafia'), ...d.roles];
   while (deck.length < seatCount) deck.push('villager');
   return deck;
 }
@@ -332,7 +347,11 @@ function suspicion(g, cid, t) {
     }
     add('i_am_seer', w);
   }
-  if (g.revealed[t]) add(g.revealed[t] === 'soldier' ? 'revealed_soldier' : 'revealed_politician', -4);
+  if (g.revealed[t]) {
+    const r = g.revealed[t];
+    if (r === 'mafia') add('revealed_mafia', 8);
+    else add(r === 'soldier' ? 'revealed_soldier' : r === 'politician' ? 'revealed_politician' : 'revealed_town', -4);
+  }
   const base = reasons.reduce((a, r) => a + r.w, 0);
   let tell = 0;
   let term = null;
@@ -422,6 +441,8 @@ function nightAction(g, id) {
     return { type: 'night', action: 'check', targets: unchecked.length ? unchecked : others };
   }
   if (role === 'doctor') return { type: 'night', action: 'protect', targets: aliveIds(g) };
+  // The reporter publishes one player's role, once per game.
+  if (role === 'reporter' && !g.reported) return { type: 'night', action: 'report', targets: others, optional: true };
   return { type: 'night', action: 'sleep', targets: [] };
 }
 
@@ -872,6 +893,18 @@ function resolveNight(g, picks) {
     armored = victim;
     victim = null;
   }
+  // Reporter: a human picks (or skips); a rival reporter files on its top suspect.
+  const reporter = g.players.find((p) => p.role === 'reporter' && p.alive);
+  let story = null;
+  if (reporter && !g.reported) {
+    if (isHuman(g, reporter.id)) story = picks[reporter.id] && isAlive(g, picks[reporter.id]) ? picks[reporter.id] : null;
+    else if (g.rng.next() < 0.6) {
+      story = aliveIds(g)
+        .filter((t) => t !== reporter.id && !g.revealed[t])
+        .map((t) => ({ t, s: suspicion(g, reporter.id, t).total + g.rng.gumbel() * 0.3 }))
+        .sort((a, b) => b.s - a.s)[0]?.t ?? null;
+    }
+  }
   const sid = seerId(g);
   if (isAlive(g, sid)) {
     if (!isHuman(g, sid)) {
@@ -896,8 +929,14 @@ function resolveNight(g, picks) {
     }
     emit(g, { t: 'night', victim, role: p.role, day: d });
   } else emit(g, { t: 'night', victim: null, saved, armored, day: d });
+  // The morning paper runs if the reporter survived the night.
+  if (story && isAlive(g, reporter.id) && isAlive(g, story)) {
+    g.reported = true;
+    g.revealed[story] = player(g, story).role;
+    emit(g, { t: 'report', target: story, role: player(g, story).role, day: d });
+  }
   if (checkWin(g)) return;
-  if (d >= MAX_DAYS + (g.players.length >= 9 ? 1 : 0)) return endByTime(g);
+  if (d >= MAX_DAYS + (g.players.length >= 9 ? 1 : 0) + (g.players.length >= 11 ? 1 : 0)) return endByTime(g);
   g.day += 1;
   g.round = 1;
   g.phase = 'statement';
@@ -964,7 +1003,7 @@ export function act(g, action) {
     emit(g, { t: 'verdict', voter: me, yes: !!action.yes, day: g.day });
     finishVerdictsWithAI(g);
   } else if (p.type === 'night') {
-    if (p.action !== 'sleep' && !p.targets.includes(action.target)) throw new Error('invalid target');
+    if (p.action !== 'sleep' && !(p.optional && !action.target) && !p.targets.includes(action.target)) throw new Error('invalid target');
     resolveNight(g, action.target ? { [me]: action.target } : {});
   }
   setPending(g);
@@ -1091,6 +1130,10 @@ export function submit(g, h, action) {
   } else if (g.phase === 'night') {
     const na = nightAction(g, h);
     if (na.action === 'sleep') return;
+    if (na.optional && !action.target) {
+      g.nightPicks[h] = null;
+      return;
+    }
     if (!na.targets.includes(action.target)) throw new Error('invalid target');
     g.nightPicks[h] = action.target;
   }

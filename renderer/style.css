@@ -281,3 +281,16 @@ table.reveal tr.human td:nth-child(2) { color: var(--accent); font-weight: 700; 
 .survey-q span { min-width: 260px; }
 .survey-q button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px 12px; }
 .survey-q button.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.seats.dense { grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.seats.dense .seat { min-height: 0; padding: 8px 6px; }
+.seats.dense .seat img { width: 52px; height: 52px; }
+.seats.dense .seat-watch, .seats.dense .seat-note { display: none; }
+.seats.dense .seat-name { font-size: 14px; }
+.role-tag.reporter, .my-role.reporter, .role-card.reporter .role-name { color: #7a5410; }
+/* 10-12 seats: compact horizontal cards so the chat keeps its space */
+.seats.dense .seat { display: grid; grid-template-columns: 44px 1fr; column-gap: 8px; row-gap: 2px; align-items: center; text-align: left; padding: 6px 8px; }
+.seats.dense .seat img { width: 44px; height: 44px; grid-row: span 4; }
+.seats.dense .seat > div { grid-column: 2; margin-top: 0; }
+.seats.dense .seat-stance { font-size: 11px; padding: 1px 6px; }
+.seats.dense .votes { letter-spacing: 0; font-size: 11px; }
+.seats.dense .voted, .seats.dense .seat-accused, .seats.dense .seat-badge { font-size: 10px; margin-top: 0; }

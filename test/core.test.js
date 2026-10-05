@@ -166,12 +166,12 @@ test('dialogue times out to templates without blocking', async () => {
   assert.equal(line.source, 'template');
 });
 
-test('report remarks only carry evidence that matches the profile', () => {
+test('report remarks only carry evidence that matches the profile', async () => {
   let profile = emptyProfile();
   const { past } = playMany(4, true, 3);
   for (const r of past) profile = addGame(profile, r);
   const report = rivalReport(profile, past[3]);
   const specs = remarkSpecs(report);
-  assert.equal(specs.length, 8);
+  assert.equal(specs.length, (await import('../src/core/characters.js')).CHARACTERS.length);
   for (const sp of specs) for (const e of sp.evidence) assert.ok(e.text.length > 0);
 });

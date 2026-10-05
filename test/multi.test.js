@@ -28,7 +28,7 @@ function playMatch(nHumans, seed, memory = true, past = {}) {
 }
 
 test('multi: seat counts and mafia count scale with humans', () => {
-  for (const [h, seats, mafia] of [[1, 7, 2], [2, 7, 2], [3, 7, 2], [4, 8, 2]]) {
+  for (const [h, seats, mafia] of [[1, 7, 2], [2, 7, 2], [3, 7, 2], [4, 8, 2], [5, 10, 3], [6, 12, 4]]) {
     const g = playMatch(h, 7);
     assert.equal(g.players.length, seats);
     assert.equal(g.players.filter((p) => p.role === 'mafia').length, mafia);
