@@ -37,6 +37,7 @@ const V = {
     asideSuspect: ['{ev}. ...메모해 두죠.'],
     asideClear: ['{ev}. 이번엔 시민 쪽 숫자네요.'],
     deny: ['저는 아닙니다. 계산해 보시면 압니다.'],
+    claimBare: ['예언자는 접니다. 다른 주장은 믿지 마세요.'],
   },
   mio: {
     accuse: ['솔직히 {t} 좀 수상해! 감이 그래.', '나 {t} 찍을래. 느낌이 쎄해!'],
@@ -49,6 +50,7 @@ const V = {
     asideSuspect: ['어?! {ev}. 나 봤다~'],
     asideClear: ['{ev}. 오늘은 순한 쪽이네?'],
     deny: ['나 아니거든! 억울해!'],
+    claimBare: ['잠깐! 진짜 예언자는 나야!'],
   },
   bruno: {
     accuse: ['흠. {t}, 내 경험상 냄새가 나.', '{t}. 눈 피하지 마. 수상해.'],
@@ -61,6 +63,7 @@ const V = {
     asideSuspect: ['{ev}. 흠, 또 그러는군.'],
     asideClear: ['{ev}. 오늘은 다르게 나오는군.'],
     deny: ['헛다리 짚지 마. 난 아냐.'],
+    claimBare: ['예언자는 나다. 저건 가짜야.'],
   },
   sera: {
     accuse: ['{t} 님, 그 수는 읽혔어요.', '{t} 님 쪽 진형이 어딘가 어색하네요.'],
@@ -73,6 +76,7 @@ const V = {
     asideSuspect: ['{ev}. 체크.'],
     asideClear: ['{ev}. 흥미로운 수네요.'],
     deny: ['저를 잡는 건 악수예요. 저는 아니에요.'],
+    claimBare: ['예언자는 저예요. 그 주장은 악수(惡手)예요.'],
   },
 };
 
@@ -87,6 +91,7 @@ V.kai = {
   asideSuspect: ['{ev}. 와 이거 각인데?'],
   asideClear: ['{ev}. 오 이번엔 다르네?'],
   deny: ['나? 에이 말도 안 돼!'],
+  claimBare: ['아니 진짜 예언자는 나라고!'],
 };
 V.noa = {
   accuse: ['{t} 님, 조금 걱정되는 부분이 있어요.', '{t} 님 말씀이 계속 마음에 걸려요.'],
@@ -99,6 +104,7 @@ V.noa = {
   asideSuspect: ['{ev}... 마음에 걸리네요.'],
   asideClear: ['{ev}. 다행이에요.'],
   deny: ['저는 정말 아니에요. 믿어 주세요.'],
+  claimBare: ['제가 진짜 예언자예요. 믿어 주세요.'],
 };
 
 // Multiplayer: rivals must read like people in a group chat, so the fallback
@@ -110,6 +116,7 @@ const CASUAL = {
   deny: ['나 아님 ㄹㅇ', '왜 나야 ㅋㅋ', '나 시민임', '억울하네'],
   claimMafia: ['나 예언자임 {t} 마피아 나옴', '조사했는데 {t} 마피아임'],
   claimTown: ['나 예언자임 {t} 시민 나옴', '조사했는데 {t}는 시민'],
+  claimBare: ['진짜 예언자 나임', '나 예언자인데? 저거 가짜'],
   memory: ['{ev}', '{ev} ㅋㅋ'],
   clear: ['{ev}'],
   remarkEmpty: ['ㄱㄱ 한판 더', '다음 판에 봄', '재밌었음'],
@@ -118,7 +125,7 @@ const CASUAL = {
 function casualLine(spec, s, nameOf) {
   const fill = (str) => withName(str, spec.target, nameOf).replaceAll('{ev}', evidenceSentence(spec.evidence || []));
   if (spec.intent === 'remark') return spec.evidence?.length ? fill(pick(CASUAL.memory, s)) : pick(CASUAL.remarkEmpty, s);
-  if (spec.intent === 'claim') return fill(pick(spec.result === 'mafia' ? CASUAL.claimMafia : CASUAL.claimTown, s));
+  if (spec.intent === 'claim') return fill(pick(!spec.target ? CASUAL.claimBare : spec.result === 'mafia' ? CASUAL.claimMafia : CASUAL.claimTown, s));
   const base = fill(pick(CASUAL[spec.intent] || CASUAL.pass, s));
   if (spec.evidence?.length) return `${base} ${fill(pick(spec.intent === 'defend' ? CASUAL.clear : CASUAL.memory, s))}`;
   return base;
@@ -170,7 +177,7 @@ export function templateLine(spec, seed = 0, opts = {}) {
     if (!ev.length) return REMARK_EMPTY[spec.speaker];
     return pick(v.memory, s).replaceAll('{ev}', evidenceSentence(ev));
   }
-  if (spec.intent === 'claim') return fill(pick(spec.result === 'mafia' ? v.claimMafia : v.claimTown, s));
+  if (spec.intent === 'claim') return fill(pick(!spec.target ? v.claimBare : spec.result === 'mafia' ? v.claimMafia : v.claimTown, s));
   const base = fill(pick(v[spec.intent] || v.pass, s));
   if (spec.evidence?.length && spec.target === HUMAN_ID) {
     const mem = fill(pick(spec.intent === 'defend' ? v.clear : v.memory, s));
@@ -184,6 +191,7 @@ export function humanLine(st) {
   if (st.intent === 'deny') return '난 아니야.';
   if (st.intent === 'accuse') return withName('{t}, 수상해.', st.target);
   if (st.intent === 'defend') return withName('{t}는 믿어도 될 것 같아.', st.target);
+  if (st.intent === 'claim' && !st.target) return '진짜 예언자는 나야.';
   if (st.intent === 'claim') return withName(`내가 예언자야. {t}는 ${st.result === 'mafia' ? '마피아' : '시민'}로 나왔어.`, st.target);
   return '...일단 지켜볼게.';
 }

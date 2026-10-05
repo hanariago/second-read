@@ -32,6 +32,14 @@ app.whenReady().then(async () => {
       await wait(250);
       if (await has('.report')) break;
       const mafia = await has('.my-role.mafia');
+      if (await has('[data-act="askPick"]')) {
+        await click('[data-act="askPick"]');
+        await wait(200);
+        await click(`[data-act="ask"][data-q="${gnum % 2 ? 'vote' : 'role'}"]`);
+        await wait(900);
+        await shot(`g${gnum}-${String(step).padStart(2, '0')}-asked`);
+        continue;
+      }
       if (await has('#say')) {
         const line = mafia ? '미오 좀 수상한데? 아까부터 말이 없음' : '음 난 아직 잘 모르겠어';
         await js(`(() => { const i = document.querySelector('#say'); i.value = ${JSON.stringify('')} + ${JSON.stringify('')}; i.value = ${JSON.stringify(line)}; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);

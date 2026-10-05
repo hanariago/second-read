@@ -11,6 +11,9 @@ import { createBridgeStore, createLocalStorageStore } from '../src/store/tellSto
 import { setupMulti } from './multi.js';
 import { assignHabits, maybeRerollHabits, notebookFor, seatNote } from '../src/core/notebook.js';
 import { FEATURES } from '../src/core/tells.js';
+import { reasonText, QUESTIONS, ANSWER_TEXT, PREDICTION_TEXT, PREDICTABLE } from '../src/data/reasons.ko.js';
+import { TIPS, UI } from '../src/data/ui.ko.js';
+import { createSound } from './sound.js';
 
 const bridge = window.secondRead ?? null;
 const store = bridge ? createBridgeStore(bridge) : createLocalStorageStore();
@@ -19,7 +22,7 @@ const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 // Once the player is out, the rest of the game plays fast.
 const sleep = (ms) => new Promise((r) => setTimeout(r, S.game && !publicView(S.game).players.find((p) => p.id === HUMAN_ID)?.alive ? Math.min(ms, 60) : ms));
-const portrait = (id) => `../assets/${id === HUMAN_ID ? 'you' : id}.svg`;
+const portrait = (id) => `../assets/portraits/${id === HUMAN_ID ? 'you' : id}.jpg`;
 
 const S = {
   auth: null,
@@ -132,6 +135,39 @@ function chatgptButton(label = 'Continue with ChatGPT', act = 'signIn') {
   return `<button class="cgpt-btn" data-act="${act}"><img src="../assets/chatgpt-logo-white.svg" alt="" /><span>${label}</span></button>`;
 }
 
+const sound = createSound(() => S.profile.settings);
+
+function rivalryLine() {
+  const r = S.profile.rivalry || {};
+  const rows = CHARACTERS.filter((c) => r[c.id] && (r[c.id].win || r[c.id].loss));
+  if (!rows.length) return '';
+  return `<div class="tally rivalry">${rows.map((c) => `<span><img src="${portrait(c.id)}" alt="" />${esc(c.name)} ${r[c.id].win}승 ${r[c.id].loss}패</span>`).join('')}</div>`;
+}
+
+// First games: one short tip per new kind of decision, shown once.
+function tipHtml(kind) {
+  const seen = S.profile.settings.tipsSeen || {};
+  if (seen[kind] || !TIPS[kind] || S.profile.games.length > 3) return '';
+  return `<div class="tip"><span>💡 ${esc(TIPS[kind])}</span><button class="link" data-act="tipOk" data-kind="${kind}">알겠어요</button></div>`;
+}
+
+function firstTip(kinds) {
+  for (const k of kinds) {
+    const h = k ? tipHtml(k) : '';
+    if (h) return h;
+  }
+  return '';
+}
+
+function predictionText(p) {
+  const P = PREDICTABLE[p.f];
+  const rival = displayName(p.rival);
+  return {
+    head: PREDICTION_TEXT.intro.replace('{rival}', rival),
+    body: PREDICTION_TEXT.body.replace('{mafia}', p.expect.mafia ? P.yes : P.no).replace('{town}', p.expect.town ? P.yes : P.no),
+  };
+}
+
 function renderTitle(msg = '') {
   S.game = null;
   updateBadges();
@@ -155,17 +191,18 @@ function renderTitle(msg = '') {
   }
   $('#screen').innerHTML = `
   <section class="title">
-    <div class="title-art">${CHARACTERS.map((c) => `<img src="${portrait(c.id)}" alt="${esc(c.name)}" />`).join('')}</div>
+    <div class="hero"><img src="../assets/portraits/keyart.jpg" alt="여섯 라이벌이 둘러앉은 테이블" /></div>
     <h1>Second Read</h1>
     <p class="tagline">기존 AI 마피아는 판이 끝나면 나를 잊는다.<br/>이 게임은 판이 쌓일수록 AI가 나를 읽고, 나는 읽힌 나를 속인다.</p>
     ${msg ? `<p class="warn">${esc(msg)}</p>` : ''}
     <div class="title-actions">${main}${S.signingIn ? '' : `<button class="ghost" data-act="mOpen">친구와 하기 (멀티)</button>`}</div>
     ${S.profile.games.length ? `<div class="tally"><span>지금까지 ${S.profile.games.length}판</span><span class="read">읽힘 ${t.caught}</span><span class="bluff">속임 ${t.bluffs}</span>${S.profile.settings.memory ? '' : '<span class="off">기억 꺼짐</span>'}</div>
+    ${rivalryLine()}
     <button class="link" data-act="lastReport">AI가 본 당신 (지난 판까지)</button>` : ''}
     <ul class="howto">
-      <li>7명 중 마피아 2명(서로를 앎), 예언자·의사 1명씩. 낮에 두 번 말하고 투표, 최다 득표자는 최후 변론 뒤 찬반으로 처형. 4일이 지나면 마피아 승리.</li>
-      <li>라이벌 4명은 각자 다른 습관을 지켜봅니다. 판이 쌓이면 지난 판의 당신을 근거로 의심하거나 믿습니다.</li>
-      <li>읽혔다 싶으면 습관을 바꿔서 속이세요. 속인 횟수도 기록됩니다.</li>
+      <li>7명 중 마피아 2명(서로를 앎), 예언자·의사 1명씩. 낮에 말하고, 하루 한 번 추궁하고, 투표합니다. 최다 득표자는 최후 변론 뒤 찬반으로 처형.</li>
+      <li>라이벌의 말에는 근거가 붙습니다. 마피아는 흔적을 남겨요: 동료에겐 표를 안 주고, 자길 의심한 사람을 밤에 노리고, 추궁당하면 거짓말을 합니다.</li>
+      <li>라이벌들은 판을 넘어 당신의 버릇을 기억하고, 판 시작 전에 예측합니다. 예측을 깨면 그 라이벌은 그 판 동안 당신을 못 읽어요.</li>
     </ul>
   </section>`;
 }
@@ -234,10 +271,38 @@ function newGame() {
       ${S.game.memory && n > 1 ? `<p class="hint">라이벌들은 지난 ${n - 1}판의 당신을 기억하고 있습니다.</p>` : ''}
       ${!S.game.memory ? `<p class="hint">기억 꺼짐: 이번 판 라이벌은 지난 판을 참고하지 않습니다.</p>` : ''}
       ${firstTime ? `<p class="hint">처음 몇 판은 역할이 번갈아 배정됩니다 (라이벌이 두 역할의 당신을 모두 봐야 하니까요).</p>` : ''}
+      ${S.game.prediction ? (() => { const t = predictionText(S.game.prediction); return `<div class="prediction-card"><img src="${portrait(S.game.prediction.rival)}" alt="" /><div><div class="pc-head">🎯 ${esc(t.head)}</div><div class="pc-body">“${esc(t.body)}”</div><div class="muted small">깨면 이번 판 ${esc(displayName(S.game.prediction.rival))}의 기억이 흐려지고, 맞으면 더 날카로워져요.</div></div></div>`; })() : ''}
       <button class="primary" data-act="closeModal">시작</button>
     </div>`);
+  sound.play('role');
   pushFeed({ kind: 'system', text: `${n}판 시작 — 1일차 낮. 모두 한 마디씩 합니다.` });
   renderActions();
+}
+
+function answerLine(ev) {
+  const r = ev.result === 'mafia' ? '마피아' : '시민';
+  const tpl = ANSWER_TEXT[ev.kind] ?? '';
+  if (ev.kind === 'why') return reasonText(ev.reason, displayName) || ANSWER_TEXT.why_none;
+  return withName(tpl, ev.target).replace('{r}', r);
+}
+
+function predictionToast(p, text) {
+  const el = document.createElement('div');
+  el.className = `read-flash pred ${p.status}`;
+  el.innerHTML = `<img src="${portrait(p.rival)}" alt="" /><div><div class="rf-kicker">🎯 예측 대결</div><div class="rf-title">${p.status === 'broken' ? '예측을 깼다' : '예측 적중'}</div><div class="rf-text">${esc(text)}</div></div>`;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2800);
+}
+
+function renderPredictionChip() {
+  const el = $('#predChip');
+  const p = S.game?.prediction;
+  if (!el || !p) return;
+  const t = predictionText(p);
+  const state = { pending: '진행 중', hit: '적중당함', broken: '깨뜨림' }[p.status];
+  el.className = `pred-chip ${p.status}`;
+  el.title = `${t.head}: ${t.body}`;
+  el.innerHTML = `<img src="${portrait(p.rival)}" alt="" />🎯 ${esc(t.head)} <b>${state}</b>`;
 }
 
 // The "들켰다" moment: a rival calls you out from memory. Never blocks input.
@@ -260,15 +325,17 @@ function pushFeed(item) {
 function feedItemHtml(it) {
   if (it.kind === 'system') return `<div class="sys">${esc(it.text)}</div>`;
   if (it.kind === 'private') return `<div class="sys private">${esc(it.text)}</div>`;
+  if (it.kind === 'alert') return `<div class="sys alert">${esc(it.text)}</div>`;
   if (it.kind === 'vote') return `<div class="vote-line"><b>${esc(displayName(it.voter))}</b> → ${esc(displayName(it.target))}</div>`;
   const c = charById[it.speaker];
   const ev = it.evidence?.length
     ? `<div class="evidence">${it.evidence.map((e) => `<span class="chip ${e.kind}">${esc(e.text)}</span>`).join('')}</div>`
     : '';
+  const why = it.reason ? `<div class="reason ${it.reason.kind.startsWith('gut') ? 'gut' : ''}">${UI.reasonLabel}: ${esc(reasonText(it.reason, displayName))}</div>` : '';
   return `<div class="line ${it.speaker === HUMAN_ID ? 'me' : ''} ${it.memory ? 'memory' : ''}">
     <img src="${portrait(it.speaker)}" alt="" />
-    <div class="bubble"><div class="who" style="color:${c?.color ?? '#b7791f'}">${esc(displayName(it.speaker))}${it.final ? '<span class="tag final">최후 변론</span>' : ''}${it.memory ? '<span class="tag">기억</span>' : ''}</div>
-    <div class="text">${esc(it.text)}</div>${ev}</div></div>`;
+    <div class="bubble"><div class="who" style="color:${c?.color ?? '#b7791f'}">${esc(displayName(it.speaker))}${it.final ? '<span class="tag final">최후 변론</span>' : ''}${it.asked ? '<span class="tag asked">추궁 답변</span>' : ''}${it.memory ? '<span class="tag">기억</span>' : ''}</div>
+    <div class="text">${esc(it.text)}</div>${why}${ev}</div></div>`;
 }
 
 // What a seat said most recently today, shown under the seat once the line is on screen.
@@ -283,7 +350,7 @@ function stanceLabel(st, nameOf = displayName) {
     case 'deny':
       return '🙅 자기 부인';
     case 'claim':
-      return `🔮 예언: ${t} ${st.result === 'mafia' ? '마피아' : '시민'}`;
+      return st.target ? `🔮 예언: ${t} ${st.result === 'mafia' ? '마피아' : '시민'}` : '🔮 예언자 주장';
     case 'skip':
       return '… 말 없음';
     default:
@@ -314,6 +381,8 @@ function seatsHtml() {
         ${S.seatNotes?.[p.id] ? `<div class="seat-note" title="내 노트: 지난 판들에서 본 이 라이벌">📓 ${esc(S.seatNotes[p.id])}</div>` : ''}
         ${check ? `<div class="seat-check ${check.result}">조사: ${check.result === 'mafia' ? '마피아' : '시민'}</div>` : ''}
         ${p.alive ? seatStanceHtml(p.id, S.stance) : ''}
+        ${p.alive && S.game.promises[S.game.day]?.[p.id] ? `<div class="seat-badge promise">${esc(UI.promiseBadge.replace('{x}', displayName(S.game.promises[S.game.day][p.id])))}</div>` : ''}
+        ${S.game.brokenPromises.some((b) => b.who === p.id) ? `<div class="seat-badge broke">${UI.brokeBadge}</div>` : ''}
         ${counts[p.id] ? `<div class="votes">${'●'.repeat(counts[p.id])}</div>` : ''}
         ${voted[p.id] ? `<div class="voted">→ ${esc(displayName(voted[p.id]))}</div>` : ''}
       </div>`;
@@ -325,11 +394,12 @@ function renderGame() {
   const g = S.game;
   $('#screen').innerHTML = `
   <section class="game">
-    <div class="game-head"><span>${g.n}판</span><span id="phaseLabel"></span><span class="my-role ${g.humanRole}">당신: ${ROLE_KO[g.humanRole]}</span>${g.memory ? '' : '<span class="off">기억 꺼짐</span>'}</div>
+    <div class="game-head"><span>${g.n}판</span><span id="phaseLabel"></span><span class="my-role ${g.humanRole}">당신: ${ROLE_KO[g.humanRole]}</span>${g.memory ? '' : '<span class="off">기억 꺼짐</span>'}<span id="predChip"></span></div>
     <div class="seats" id="seats">${seatsHtml()}</div>
     <div class="feed" id="feed">${S.feed.map(feedItemHtml).join('')}</div>
     <div class="actions" id="actions"></div>
   </section>`;
+  renderPredictionChip();
 }
 
 function refreshSeats() {
@@ -380,6 +450,21 @@ function targetButtons(targets, act, extra = '') {
   return targets.map((t) => `<button class="target" data-act="${act}" data-target="${t}" ${extra}><img src="${portrait(t)}" alt="" />${esc(displayName(t))}</button>`).join('');
 }
 
+// "추궁하기": once a day, pick a rival, then one of three questions.
+function askHtml(p) {
+  if (!p.askable?.length) return '';
+  if (!p.canAsk) return `<div class="ask-row used">🔎 ${UI.askUsed}</div>`;
+  const t = S.askTarget && p.askable.includes(S.askTarget) ? S.askTarget : null;
+  const hasAccused = t && (S.game.statements[S.game.day] || []).some((s) => s.speaker === t && s.intent === 'accuse');
+  return `<div class="ask-row"><span class="act-label">🔎 ${UI.askTitle} <span class="muted small">${UI.askHint}</span></span>
+    ${t
+      ? `<span class="ask-who"><img src="${portrait(t)}" alt="" />${esc(displayName(t))}에게</span>${Object.entries(QUESTIONS)
+          .filter(([q]) => q !== 'why' || hasAccused)
+          .map(([q, v]) => `<button class="target q" data-act="ask" data-target="${t}" data-q="${q}">${esc(v.label)}</button>`)
+          .join('')}<button class="link" data-act="askCancel">취소</button>`
+      : targetButtons(p.askable, 'askPick')}</div>`;
+}
+
 function renderActions() {
   refreshSeats();
   const el = $('#actions');
@@ -410,17 +495,18 @@ function renderActions() {
       <div class="act-row"><span class="act-label">감싼다</span>${targetButtons(p.targets, 'say-defend')}</div>
       ${p.claims.length ? `<div class="act-row"><span class="act-label">조사 결과 공개</span>${p.claims.map((c) => `<button class="target claim" data-act="say-claim" data-target="${c.target}">${esc(withName(`{t}는 ${c.result === 'mafia' ? '마피아' : '시민'}`, c.target))}</button>`).join('')}</div>` : ''}
       <div class="act-row"><span class="act-label">나를 변호</span><button class="ghost ${p.accusedBy.length ? 'hot' : ''}" data-act="say-deny">나는 아니다</button>${p.accusedBy.length ? `<span class="muted small">당신을 의심 중: ${esc(p.accusedBy.map((x) => displayName(x)).join(', '))}</span>` : ''}</div>
-      <div class="act-row"><button class="ghost" data-act="say-pass">관망한다</button></div>`;
+      <div class="act-row"><button class="ghost" data-act="say-pass">관망한다</button>${p.canClaimBare ? `<button class="ghost seer" data-act="say-claim-bare">내가 진짜 예언자다</button>` : ''}</div>`;
     }
+    el.innerHTML = firstTip(['statement', S.game.prediction ? 'prediction' : null, p.canAsk ? 'ask' : null]) + el.innerHTML + askHtml(p);
   } else if (p.type === 'vote') {
     const total = S.game.voteOrder[S.game.day].length;
-    el.innerHTML = `
+    el.innerHTML = tipHtml('vote') + `
       <div class="act-title">처형 투표 <span class="muted">투표 진행 ${p.votes.length}/${total + 1} · 언제 투표할지도 당신의 선택</span></div>
       <div class="act-row">${targetButtons(p.targets, 'vote')}</div>`;
     if (p.canWait) S.voteTimer = setTimeout(() => doAct({ type: 'wait' }), p.votes.length === 0 ? 3200 : 1700);
   } else if (p.type === 'defense') {
     const textMode = S.profile.settings.inputMode === 'text';
-    const head = `<div class="act-title">최후 변론 <span class="muted">당신이 최다 득표(${p.counts[HUMAN_ID]}표). 이 한마디 뒤에 찬반 투표가 열립니다.</span></div>`;
+    const head = tipHtml('defense') + `<div class="act-title">최후 변론 <span class="muted">당신이 최다 득표(${p.counts[HUMAN_ID]}표). 이 한마디 뒤에 찬반 투표가 열립니다.</span></div>`;
     if (textMode) {
       el.innerHTML = `${head}
         <div class="composer"><input id="say" maxlength="80" placeholder="예: 나 아니야, 진짜 마피아는 미오야" autocomplete="off" /><button class="primary" data-act="sayText">변론하기</button></div>
@@ -434,13 +520,15 @@ function renderActions() {
         ${p.claims.length ? `<div class="act-row"><span class="act-label">조사 결과 공개</span>${p.claims.map((c) => `<button class="target claim" data-act="say-claim" data-target="${c.target}">${esc(withName(`{t}는 ${c.result === 'mafia' ? '마피아' : '시민'}`, c.target))}</button>`).join('')}</div>` : ''}`;
     }
   } else if (p.type === 'verdict') {
-    el.innerHTML = `<div class="act-title">${esc(displayName(p.target))}의 처형 <span class="muted">최후 변론을 듣고 결정하세요. 찬성이 과반이어야 처형됩니다.</span></div>
+    el.innerHTML = tipHtml('verdict') + `<div class="act-title">${esc(displayName(p.target))}의 처형 <span class="muted">최후 변론을 듣고 결정하세요. 찬성이 과반이어야 처형됩니다.</span></div>
       <div class="act-row"><button class="primary" data-act="verdict-yes">처형 찬성</button><button class="ghost" data-act="verdict-no">반대 (살린다)</button></div>`;
   } else if (p.type === 'night') {
+    sound.mood(true);
     if (p.action === 'kill') el.innerHTML = `<div class="act-title">밤 · 제거할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else if (p.action === 'check') el.innerHTML = `<div class="act-title">밤 · 정체를 조사할 사람을 고르세요</div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else if (p.action === 'protect') el.innerHTML = `<div class="act-title">밤 · 오늘 밤 지킬 사람을 고르세요 <span class="muted">(자신도 가능)</span></div><div class="act-row">${targetButtons(p.targets, 'night')}</div>`;
     else el.innerHTML = `<div class="act-title">밤 · 시민은 잠듭니다</div><div class="act-row"><button class="primary" data-act="sleep">잠들기</button></div>`;
+    el.innerHTML = tipHtml('night') + el.innerHTML;
   } else if (p.type === 'spectate') {
     el.innerHTML = `<div class="act-title">당신은 탈락했습니다</div><div class="act-row"><button class="primary" data-act="spectate">남은 판 결과 보기</button></div>`;
   }
@@ -474,19 +562,30 @@ async function processEvents(events) {
       S.stance[HUMAN_ID] = ev;
       refreshSeats();
     } else if (ev.t === 'statement') {
-      const batch = [];
-      while (i < events.length && events[i].t === 'statement' && events[i].speaker !== HUMAN_ID) batch.push(events[i++]);
+      const all = [];
+      while (i < events.length && events[i].t === 'statement' && events[i].speaker !== HUMAN_ID) all.push(events[i++]);
       i--;
-      const specs = batch.map((e) => ({ speaker: e.speaker, intent: e.intent, target: e.target, result: e.result, evidence: e.evidence, day: e.day, final: e.final }));
+      // Silent skips stay silent; plain "watching" lines collapse into one line.
+      const quiet = all.filter((e) => (e.intent === 'pass' || e.intent === 'skip') && !e.evidence?.length && !e.final);
+      const batch = all.filter((e) => !quiet.includes(e));
+      for (const q of quiet) S.stance[q.speaker] = q.intent === 'pass' ? q : S.stance[q.speaker];
+      const watchers = quiet.filter((e) => e.intent === 'pass');
+      if (watchers.length) pushFeed({ kind: 'system', text: UI.passGroup.replace('{names}', watchers.map((e) => displayName(e.speaker)).join('·')) });
+      if (!batch.length) {
+        refreshSeats();
+        continue;
+      }
+      const specs = batch.map((e) => ({ speaker: e.speaker, intent: e.intent, target: e.target, result: e.result, evidence: e.evidence, day: e.day, final: e.final, reason: e.reason }));
       pushFeed({ kind: 'system', text: `${batch.map((b) => displayName(b.speaker)).join(', ')} 생각 중…` });
       const worth = specs.map((sp) => worthModel(g, sp));
       if (S.gm && S.aiOn && worth.some(Boolean)) S.gm.modelBatches = (S.gm.modelBatches ?? 0) + 1;
       const lines = await renderLines(sceneSummary(g), specs, `d${g.day}-statements`, { mode: 'single', chat: todayChat(g), useModel: (sp) => worth[specs.indexOf(sp)] });
       for (let k = 0; k < batch.length; k++) {
         setLineText(g, batch[k], lines[k].text);
-        pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length, final: batch[k].final });
+        pushFeed({ kind: 'line', speaker: batch[k].speaker, text: lines[k].text, evidence: batch[k].evidence, memory: !!batch[k].evidence?.length, final: batch[k].final, reason: batch[k].reason });
         S.stance[batch[k].speaker] = batch[k];
         refreshSeats();
+        sound.play('line');
         if (batch[k].evidence?.length && batch[k].target === HUMAN_ID && batch[k].intent === 'accuse') readFlash(batch[k].speaker, lines[k].text);
         await sleep(450);
       }
@@ -495,17 +594,36 @@ async function processEvents(events) {
       pushFeed({ kind: 'line', speaker: ev.speaker, text, evidence: ev.evidence, memory: true });
       if (ev.kind === 'suspect') readFlash(ev.speaker, text);
       await sleep(700);
+    } else if (ev.t === 'answer') {
+      const text = answerLine(ev);
+      pushFeed({ kind: 'line', speaker: ev.speaker, text, asked: true, reason: ev.kind === 'why' ? ev.reason : null });
+      if (ev.kind === 'role_seer' || ev.kind === 'role_seer_bare') S.stance[ev.speaker] = { intent: 'claim', target: ev.target, result: ev.result };
+      sound.play('ask');
+      refreshSeats();
+      await sleep(400);
+    } else if (ev.t === 'promiseBroken') {
+      pushFeed({ kind: 'alert', text: UI.promiseBroken.replace('{t}', displayName(ev.who)).replace('{x}', displayName(ev.promised)).replace('{y}', displayName(ev.voted)) });
+      sound.play('read');
+      await sleep(500);
+    } else if (ev.t === 'prediction') {
+      const msg = PREDICTION_TEXT[ev.status].replaceAll('{rival}', displayName(ev.rival));
+      predictionToast(ev, msg);
+      sound.play(ev.status === 'broken' ? 'predict' : 'read');
+      renderPredictionChip();
     } else if (ev.t === 'vote') {
       pushFeed({ kind: 'vote', voter: ev.voter, target: ev.target });
       refreshSeats();
+      sound.play('vote');
       if (ev.voter !== HUMAN_ID) await sleep(380);
     } else if (ev.t === 'execute') {
       refreshSeats();
       await sleep(400);
       pushFeed({ kind: 'system', text: `찬성 ${ev.yes} : 반대 ${ev.no} — ${displayName(ev.target)} 처형. 정체: ${ROLE_KO[ev.role]}` });
+      sound.play('execute');
     } else if (ev.t === 'trial') {
       refreshSeats();
       pushFeed({ kind: 'system', text: `${ev.tie ? '동표 — 제비뽑기로 ' : ''}${displayName(ev.target)} 최다 득표(${ev.counts[ev.target]}표). 처형 전에 최후 변론.` });
+      sound.play('trial');
       await sleep(500);
     } else if (ev.t === 'verdict') {
       const batch = [];
@@ -525,15 +643,21 @@ async function processEvents(events) {
     } else if (ev.t === 'phase') {
       refreshSeats();
       if (ev.phase === 'vote') pushFeed({ kind: 'system', text: `${ev.day}일차 투표. 처형할 사람을 고르세요.` });
-      if (ev.phase === 'night') pushFeed({ kind: 'system', text: `${ev.day}일차 밤.` });
+      if (ev.phase === 'night') {
+        pushFeed({ kind: 'system', text: `${ev.day}일차 밤.` });
+        sound.play('night');
+      }
       if (ev.phase === 'statement' && ev.day > 1 && ev.round === 1) {
         S.stance = {};
+        sound.mood(false);
         refreshSeats();
         pushFeed({ kind: 'system', text: `${ev.day}일차 낮.` });
       }
       if (ev.phase === 'statement' && ev.round > 1) pushFeed({ kind: 'system', text: `${ev.round}라운드 — 방금 말에 반응할 차례.` });
     } else if (ev.t === 'over') {
       pushFeed({ kind: 'system', text: ev.timeout ? '4일이 지났습니다 — 마피아가 끝까지 숨어 승리' : ev.winner === 'town' ? '시민 승리' : '마피아 승리' });
+      sound.play(ev.humanWon ? 'win' : 'lose');
+      sound.mood(false);
     }
   }
 }
@@ -542,6 +666,13 @@ async function finishGame() {
   const g = S.game;
   const record = gameRecord(g);
   S.profile = addGame(S.profile, record);
+  // Prediction duel record, per rival.
+  if (record.prediction && record.prediction.status !== 'pending') {
+    const rv = { ...(S.profile.rivalry || {}) };
+    const cur = rv[record.prediction.rival] || { win: 0, loss: 0 };
+    rv[record.prediction.rival] = record.prediction.status === 'broken' ? { ...cur, win: cur.win + 1 } : { ...cur, loss: cur.loss + 1 };
+    S.profile = { ...S.profile, rivalry: rv };
+  }
   // A rival caught with its habit may quietly change it.
   const { habits, changed } = maybeRerollHabits(S.profile.aiHabits, record);
   S.profile = { ...S.profile, aiHabits: habits };
@@ -635,6 +766,8 @@ function renderReport() {
       <div class="result-main">${won ? '승리' : '패배'}</div>
       <div class="muted">${record.winner === 'town' ? '시민 승리' : '마피아 승리'}${record.memory ? '' : ' · 기억 꺼짐으로 플레이한 판'}</div>
     </div>
+    ${record.prediction ? (() => { const pt = predictionText(record.prediction); const st = { pending: '이번 판엔 판정 없음', hit: '적중당했다', broken: '깨뜨렸다' }[record.prediction.status]; return `<div class="pred-result ${record.prediction.status}"><img src="${portrait(record.prediction.rival)}" alt="" /><div><b>🎯 ${esc(pt.head)} — ${st}</b><div class="muted">“${esc(pt.body)}”</div></div></div>`; })() : ''}
+    ${rivalryLine()}
     <h2>AI가 본 당신 <span class="muted">라이벌들의 연구 노트 · ${report.gamesSeen}판 분량</span></h2>
     <div class="tally big"><span class="read">읽힘 ${t.caught}</span><span class="bluff">속임 ${t.bluffs}</span><span class="muted">이번 판 기억이 바꾼 투표 ${flips.length}표</span></div>
     ${flips.length ? '' : `<p class="muted">이번 판에는 기억 때문에 바뀐 투표가 없었습니다.</p>`}
@@ -679,6 +812,11 @@ async function openSettings() {
         : `<p class="muted">로그인하지 않음</p>${chatgptButton()}`}
     </section>
     ${a.planEnabled ? `<section><h3>모델</h3><select id="modelSelect"><option>불러오는 중…</option></select><p class="muted small">빠른 모델일수록 판 템포가 좋아집니다.</p></section>` : ''}
+    <section><h3>소리</h3>
+      <label class="toggle"><input type="checkbox" id="sfxToggle" ${S.profile.settings.sfx !== false ? 'checked' : ''}/> 효과음</label>
+      <label class="toggle"><input type="checkbox" id="musicToggle" ${S.profile.settings.music ? 'checked' : ''}/> 배경음 (조용한 패드)</label>
+      <label class="toggle">볼륨 <input type="range" id="volume" min="0" max="1" step="0.05" value="${S.profile.settings.volume ?? 0.8}" /></label>
+    </section>
     <section><h3>기억</h3>
       <label class="toggle"><input type="checkbox" id="memToggle" ${S.profile.settings.memory !== false ? 'checked' : ''}/> 라이벌이 지난 판을 기억함</label>
       <p class="muted small">끄면 라이벌이 지난 판을 참고하지 않습니다(비교용). 꺼진 상태로 한 판은 기억에 쌓이지 않습니다.</p>
@@ -713,6 +851,7 @@ document.addEventListener('click', async (e) => {
   }
   const b = e.target.closest('[data-act]');
   if (!b) return;
+  sound.play('click');
   const a = b.dataset.act;
   const t = b.dataset.target;
   if (a === 'mBack') return multi.backToRoom();
@@ -754,6 +893,21 @@ document.addEventListener('click', async (e) => {
       return doAct({ intent: 'pass' });
     case 'say-deny':
       return doAct({ intent: 'deny' });
+    case 'say-claim-bare':
+      return doAct({ intent: 'claim' });
+    case 'askPick':
+      S.askTarget = t;
+      return renderActions();
+    case 'askCancel':
+      S.askTarget = null;
+      return renderActions();
+    case 'ask':
+      S.askTarget = null;
+      return doAct({ type: 'ask', target: t, q: b.dataset.q });
+    case 'tipOk':
+      S.profile = { ...S.profile, settings: { ...S.profile.settings, tipsSeen: { ...(S.profile.settings.tipsSeen || {}), [b.dataset.kind]: true } } };
+      await store.save(S.profile);
+      return renderActions();
     case 'verdict-yes':
       return doAct({ yes: true });
     case 'verdict-no':
@@ -822,6 +976,12 @@ document.addEventListener('change', async (e) => {
     if (!S.game) renderTitle();
   }
   if (e.target.id === 'modelSelect') await bridge?.setModel(e.target.value);
+  if (['sfxToggle', 'musicToggle', 'volume'].includes(e.target.id)) {
+    const v = e.target.id === 'volume' ? { volume: +e.target.value } : e.target.id === 'sfxToggle' ? { sfx: e.target.checked } : { music: e.target.checked };
+    S.profile = { ...S.profile, settings: { ...S.profile.settings, ...v } };
+    await store.save(S.profile);
+    if (e.target.id === 'musicToggle') (e.target.checked ? sound.startPad() : sound.stopPad());
+  }
 });
 
 $('#settingsBtn').addEventListener('click', () => {

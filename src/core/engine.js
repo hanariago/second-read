@@ -331,7 +331,7 @@ function suspicion(g, cid, t) {
 // The strongest reason behind an accusation (or defense), for the line's "근거".
 function topReason(s, sign = 1) {
   const facts = s.reasons.filter((r) => r.kind !== 'gut' && Math.sign(r.w) === sign).sort((a, b) => sign * (b.w - a.w));
-  return facts[0] && Math.abs(facts[0].w) >= 0.3 ? facts[0] : { kind: 'gut', subject: s.reasons[0]?.subject ?? null };
+  return facts[0] && Math.abs(facts[0].w) >= 0.3 ? facts[0] : { kind: sign > 0 ? 'gut' : 'gut_trust', subject: s.reasons[0]?.subject ?? null };
 }
 
 // Hidden mafia rivals push whoever the town already distrusts most, never a teammate.

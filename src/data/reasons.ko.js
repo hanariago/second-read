@@ -5,6 +5,7 @@
 
 export const REASON_TEXT = {
   gut: '딱히 근거는 없고 감',
+  gut_trust: '딱히 근거는 없고 믿음이 감',
   accused_me: '{t}가 나를 의심했음',
   defended_me: '{t}가 나를 감싸 줬음',
   deny_unprompted: '{t}는 아무도 안 물었는데 먼저 부인했음',
