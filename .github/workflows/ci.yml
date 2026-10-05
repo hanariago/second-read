@@ -64,6 +64,8 @@ jobs:
           if [ -n "$CSC_LINK" ]; then
             npx electron-builder --mac -c.mac.hardenedRuntime=true -c.mac.notarize=true --publish never
           else
+            # No certificate yet: clear the empty secret variables and ad-hoc sign.
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
             npx electron-builder --mac -c.mac.identity=- --publish never
           fi
       - name: Build (Windows)
@@ -72,7 +74,9 @@ jobs:
           CSC_LINK: ${{ secrets.WIN_CERT_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
         shell: bash
-        run: npx electron-builder --win --publish never
+        run: |
+          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          npx electron-builder --win --publish never
       - name: Smoke-launch the packaged Windows app
         if: runner.os == 'Windows'
         shell: pwsh
