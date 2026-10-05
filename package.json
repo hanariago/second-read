@@ -43,7 +43,8 @@
       "assets/**",
       "package.json",
       "LICENSE",
-      "!**/._*"
+      "!**/._*",
+      "!assets/art-src/**"
     ],
     "mac": {
       "target": [
